@@ -1,0 +1,15 @@
+# Listing of Parameters
+# ---------------------
+
+# Dimension of ambient space
+set space dimension = 2
+
+subsection Mesh parameters
+
+  # number of refinements for coarse mesh
+  set coarse refinements = 3
+
+  # number of local refinements
+  set local refinements = 4
+  
+end
