@@ -1,74 +1,35 @@
-.metadata
-bin/
-tmp/
-*.tmp
-*.bak
-*.swp
-*~.nib
-local.properties
-.settings/
-.loadpath
-.recommenders
+# Ingnore generated documentation
+documentation/
 
+# Prerequisites
+*.d
 
-# Build directories
-/build
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
 
-# External tool builders
-.externalToolBuilders/
+# Precompiled Headers
+*.gch
+*.pch
 
-# Locally stored "Eclipse launch configurations"
-*.launch
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
 
-# The eclipse project including options for make
-.project
+# Fortran module files
+*.mod
+*.smod
 
-# PyDev specific (Python IDE for Eclipse)
-*.pydevproject
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
 
-# CDT-specific (C/C++ Development Tooling)
-.cproject
-
-# CDT- autotools
-.autotools
-
-# Java annotation processor (APT)
-.factorypath
-
-# PDT-specific (PHP Development Tools)
-.buildpath
-
-# sbteclipse plugin
-.target
-
-# Tern plugin
-.tern-project
-
-# TeXlipse plugin
-.texlipse
-
-# STS (Spring Tool Suite)
-.springBeans
-
-# Code Recommenders
-.recommenders/
-
-# Annotation Processing
-.apt_generated/
-
-# Scala IDE specific (Scala & Java development for Eclipse)
-.cache-main
-.scala_dependencies
-.worksheet
-
-
-# This is to ignore cmake stuff
-CMakeCache.txt
-CMakeFiles
-CMakeScripts
-Testing
-Makefile
-cmake_install.cmake
-install_manifest.txt
-compile_commands.json
-CTestTestfile.cmake
+# Executables
+*.exe
+*.out
+*.app
