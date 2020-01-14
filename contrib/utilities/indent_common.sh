@@ -4,7 +4,7 @@
 # This file contains a number of common functions used all indent scripts
 #
 
-export CASIS_CLANG_FORMAT="clang-format-6.0"
+export AquaPlanet_CLANG_FORMAT="clang-format-6.0"
 
 
 #
@@ -18,7 +18,7 @@ checks() {
     exit 1
   fi
 
-  if ! [ -x "$(command -v ${CASIS_CLANG_FORMAT})" ]; then
+  if ! [ -x "$(command -v ${AquaPlanet_CLANG_FORMAT})" ]; then
     echo "***"
     echo "***   No clang-format-6.0 program found. Install form your package manager."
     echo "***"
@@ -27,7 +27,7 @@ checks() {
 
   # Make sure to have the right version. We know that clang-6.0.0
   # and clang-6.0.1 work. Hence, test for clang-6.0.
-  CLANG_FORMAT_VERSION="$(${CASIS_CLANG_FORMAT} --version)"
+  CLANG_FORMAT_VERSION="$(${AquaPlanet_CLANG_FORMAT} --version)"
   CLANG_FORMAT_MAJOR_VERSION=$(echo "${CLANG_FORMAT_VERSION}" | sed 's/^[^0-9]*\([0-9]*\).*$/\1/g')
   CLANG_FORMAT_MINOR_VERSION=$(echo "${CLANG_FORMAT_VERSION}" | sed 's/^[^0-9]*[0-9]*\.\([0-9]*\).*$/\1/g')
   if [ "${CLANG_FORMAT_MAJOR_VERSION}" -ne 6 ] || [ "${CLANG_FORMAT_MINOR_VERSION}" -ne 0 ]; then
@@ -118,7 +118,7 @@ format_file()
   tmpfile="$(mktemp "${TMPDIR}/$(basename "$1").tmp.XXXXXXXX")"
   arg="-style=file"
 
-  "${CASIS_CLANG_FORMAT}" "${arg}" "${file}" > "${tmpfile}"
+  "${AquaPlanet_CLANG_FORMAT}" "${arg}" "${file}" > "${tmpfile}"
   fix_or_report "${file}" "${tmpfile}" "file indented incorrectly"
   rm -f "${tmpfile}"
 }
