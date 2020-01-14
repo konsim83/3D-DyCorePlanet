@@ -38,12 +38,19 @@ DEAL_II_INITIALIZE_CACHED_VARIABLES()
 
 ADD_CUSTOM_TARGET(debug
   COMMAND ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE=Debug ${CMAKE_SOURCE_DIR}
-  COMMENT "Switch CMAKE_BUILD_TYPE to Debug"
+  COMMENT "Switch CMAKE_BUILD_TYPE to Debug."
   )
 
 ADD_CUSTOM_TARGET(release
   COMMAND ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE=Release ${CMAKE_SOURCE_DIR}
-  )  
+  COMMENT "Switch CMAKE_BUILD_TYPE to Release."
+  )
+  
+ADD_CUSTOM_TARGET(indent
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  COMMAND ./contrib/utilities/indent
+  COMMENT "Indenting all C++ source and header files."
+  )
 
 set(PROJECT_NAME AquaPlanet)
 
