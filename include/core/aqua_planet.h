@@ -1,5 +1,4 @@
-#ifndef INCLUDE_AQUA_PLANET_H_
-#define INCLUDE_AQUA_PLANET_H_
+#pragma once
 
 // Deal.ii
 #include <deal.II/base/conditional_ostream.h>
@@ -10,11 +9,6 @@
 #include <deal.II/base/utilities.h>
 
 #include <deal.II/distributed/tria.h>
-
-#include <deal.II/dofs/dof_accessor.h>
-#include <deal.II/dofs/dof_handler.h>
-#include <deal.II/dofs/dof_renumbering.h>
-#include <deal.II/dofs/dof_tools.h>
 
 #include <deal.II/grid/cell_id.h>
 #include <deal.II/grid/grid_generator.h>
@@ -31,15 +25,18 @@
 #include <string>
 
 
-// My headers
+// AquaPlanet headers
+#include <base/config.h>
+#include <model_data/boussinesq_model_data.h>
 
 
-using namespace dealii;
+AQUAPLANET_OPEN_NAMESPACE
 
 
 /*!
- * Class to handle mesh for aqua planet. The mesh
- * is a 3D spherical shell.
+ * Base class to handle mesh for aqua planet. The mesh
+ * is a 3D spherical shell. Derived classes will implement different model
+ * details.
  */
 class AquaPlanet
 {
@@ -47,19 +44,15 @@ public:
   /*!
    * Constructor of mesh handler for spherical shell.
    */
-  AquaPlanet();
+  AquaPlanet(double inner_radius, double outer_radius);
   ~AquaPlanet();
 
+protected:
   void
-  run();
+  write_mesh_vtu() const;
 
-private:
   void
-  make_mesh();
-  void
-  output_mesh() const;
-  void
-  refine_grid();
+  refine_global(unsigned int n_refine);
 
   MPI_Comm mpi_communicator;
 
@@ -68,13 +61,10 @@ private:
 
   parallel::distributed::Triangulation<3> triangulation;
 
-  DoFHandler<3> dof_handler;
-
   const Point<3> center;
   const double   inner_radius, outer_radius;
 
   const SphericalManifold<3> boundary_description;
 };
 
-
-#endif /* INCLUDE_AQUA_PLANET_H_ */
+AQUAPLANET_CLOSE_NAMESPACE
