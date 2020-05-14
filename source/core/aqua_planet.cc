@@ -1,7 +1,8 @@
-#include <aqua_planet.h>
+#include <core/aqua_planet.h>
 
+AQUAPLANET_OPEN_NAMESPACE
 
-AquaPlanet::AquaPlanet()
+AquaPlanet::AquaPlanet(double inner_radius, double outer_radius)
   : mpi_communicator(MPI_COMM_WORLD)
   , pcout(std::cout, (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0))
   , computing_timer(mpi_communicator,
@@ -12,22 +13,10 @@ AquaPlanet::AquaPlanet()
                   typename Triangulation<3>::MeshSmoothing(
                     Triangulation<3>::smoothing_on_refinement |
                     Triangulation<3>::smoothing_on_coarsening))
-  , dof_handler(triangulation)
   , center(0, 0, 0)
-  , inner_radius(1)
-  , outer_radius(2)
+  , inner_radius(inner_radius)
+  , outer_radius(outer_radius)
   , boundary_description(center)
-{}
-
-
-
-AquaPlanet::~AquaPlanet()
-{}
-
-
-
-void
-AquaPlanet::make_mesh()
 {
   GridGenerator::hyper_shell(triangulation, center, inner_radius, outer_radius);
 
@@ -40,27 +29,33 @@ AquaPlanet::make_mesh()
   for (; cell != endc; ++cell)
     cell->set_all_manifold_ids(0);
 
-  triangulation.refine_global(4);
-
   pcout << "   Number of active cells:       " << triangulation.n_active_cells()
         << std::endl;
 }
 
 
 
-void
-AquaPlanet::refine_grid()
+AquaPlanet::~AquaPlanet()
 {}
 
 
 
 void
-AquaPlanet::output_mesh() const
+AquaPlanet::refine_global(unsigned int n_refine)
 {
-  //  Assert (cycle < 10, ExcNotImplemented());
+  triangulation.refine_global(n_refine);
 
+  pcout << "   Number of active cells after global refinement:       "
+        << triangulation.n_active_cells() << std::endl;
+}
+
+
+
+void
+AquaPlanet::write_mesh_vtu() const
+{
   DataOut<3> data_out;
-  data_out.attach_dof_handler(dof_handler);
+  data_out.attach_triangulation(triangulation);
 
   // Add data to indicate subdomain
   Vector<float> subdomain(triangulation.n_active_cells());
@@ -74,7 +69,7 @@ AquaPlanet::output_mesh() const
   data_out.build_patches();
 
   const std::string filename_local =
-    "aqua_palnet_mesh." +
+    "boussinesq_palnet_mesh." +
     Utilities::int_to_string(triangulation.locally_owned_subdomain(), 4) +
     ".vtu";
 
@@ -88,20 +83,14 @@ AquaPlanet::output_mesh() const
       for (unsigned int i = 0;
            i < Utilities::MPI::n_mpi_processes(mpi_communicator);
            ++i)
-        filenames.emplace_back("aqua_palnet_mesh." +
+        filenames.emplace_back("boussinesq_palnet_mesh." +
                                Utilities::int_to_string(i, 4) + ".vtu");
 
-      std::string   master_file("aqua_palnet_mesh.pvtu");
+      std::string   master_file("boussinesq_palnet_mesh.pvtu");
       std::ofstream master_output(master_file.c_str());
       data_out.write_pvtu_record(master_output, filenames);
     }
 }
 
 
-
-void
-AquaPlanet::run()
-{
-  make_mesh();
-  output_mesh();
-}
+AQUAPLANET_CLOSE_NAMESPACE

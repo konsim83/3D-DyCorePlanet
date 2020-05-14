@@ -5,12 +5,12 @@
 #include <deal.II/base/numbers.h>
 #include <deal.II/base/utilities.h>
 
-
 // C++ STL
+#include <fstream>
 #include <iostream>
 
-// My headers
-#include <aqua_planet.h>
+// AquaPlanet
+#include <core/boussinesq_model.h>
 
 
 using namespace dealii;
@@ -19,13 +19,55 @@ using namespace dealii;
 int
 main(int argc, char *argv[])
 {
+  // Very simple way of input handling.
+  if (argc < 2)
+    {
+      std::cout << "You must provide an input file \"-p <filename>\""
+                << std::endl;
+      exit(1);
+    }
+
+  std::string input_file = "";
+
+  std::list<std::string> args;
+  for (int i = 1; i < argc; ++i)
+    {
+      args.push_back(argv[i]);
+    }
+
+  while (args.size())
+    {
+      if (args.front() == std::string("-p"))
+        {
+          if (args.size() == 1) /* This is not robust. */
+            {
+              std::cerr << "Error: flag '-p' must be followed by the "
+                        << "name of a parameter file." << std::endl;
+              exit(1);
+            }
+          else
+            {
+              args.pop_front();
+              input_file = args.front();
+              args.pop_front();
+            }
+        }
+      else
+        {
+          std::cerr << "Unknown command line option: " << args.front()
+                    << std::endl;
+          exit(1);
+        }
+    } // end while
+
   dealii::Utilities::MPI::MPI_InitFinalize mpi_initialization(
     argc, argv, dealii::numbers::invalid_unsigned_int);
 
   try
     {
-      AquaPlanet aqua_planet;
-      aqua_planet.run();
+      AquaPlanet::BoussinesqModel::Parameters parameters_boussinesq(input_file);
+      AquaPlanet::BoussinesqModel aqua_planet_boussinesq(parameters_boussinesq);
+      aqua_planet_boussinesq.run();
     }
 
   catch (std::exception &exc)

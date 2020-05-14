@@ -4,7 +4,7 @@
 # This file contains a number of common functions used all indent scripts
 #
 
-export AquaPlanet_CLANG_FORMAT="clang-format-6.0"
+export AquaPlanet_CLANG_FORMAT="clang-format-10"
 
 
 #
@@ -20,19 +20,19 @@ checks() {
 
   if ! [ -x "$(command -v ${AquaPlanet_CLANG_FORMAT})" ]; then
     echo "***"
-    echo "***   No clang-format-6.0 program found. Install form your package manager."
+    echo "***   No clang-format-10.0 program found. Install form your package manager."
     echo "***"
     exit 1
   fi
 
-  # Make sure to have the right version. We know that clang-6.0.0
-  # and clang-6.0.1 work. Hence, test for clang-6.0.
+  # Make sure to have the right version. We know that clang-10.0.0
+  # and clang-10.0.1 work. Hence, test for clang-10.0.
   CLANG_FORMAT_VERSION="$(${AquaPlanet_CLANG_FORMAT} --version)"
   CLANG_FORMAT_MAJOR_VERSION=$(echo "${CLANG_FORMAT_VERSION}" | sed 's/^[^0-9]*\([0-9]*\).*$/\1/g')
   CLANG_FORMAT_MINOR_VERSION=$(echo "${CLANG_FORMAT_VERSION}" | sed 's/^[^0-9]*[0-9]*\.\([0-9]*\).*$/\1/g')
-  if [ "${CLANG_FORMAT_MAJOR_VERSION}" -ne 6 ] || [ "${CLANG_FORMAT_MINOR_VERSION}" -ne 0 ]; then
+  if [ "${CLANG_FORMAT_MAJOR_VERSION}" -ne 10 ] || [ "${CLANG_FORMAT_MINOR_VERSION}" -ne 0 ]; then
     echo "***"
-    echo "***   This indent script requires clang-format version 6.0. Install form your package manager."
+    echo "***   This indent script requires clang-format version 10.0. Install form your package manager."
     echo "***"
     exit 1
   fi
@@ -44,7 +44,7 @@ checks() {
   # Jane Doe <a@nodomain>
   #
   # first user names:
-  git log --since "2019-01-01" --format="%aN" | sort -u | while read name ; do
+  git log --since "2020-01-01" --format="%aN" | sort -u | while read name ; do
       words=($name)
       if [ "${#words[@]}" -lt "2" ]; then
 	  echo "invalid author '$name' without firstname and lastname"
@@ -56,7 +56,7 @@ checks() {
   done || exit 2
 
   # now emails:
-  git log --since "2019-01-01" --format="%aE" | sort -u | while read email ; do
+  git log --since "2020-01-01" --format="%aE" | sort -u | while read email ; do
       words=($name)
       if ! echo "$email" | grep -q "\."; then
 	  echo "invalid email '$email'"

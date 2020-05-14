@@ -1,15 +1,14 @@
-# Listing of Parameters
-# ---------------------
+subsection Boussinesq Model
 
-# Dimension of ambient space
-set space dimension = 2
+	subsection Mesh parameters
+		set initial global refinement = 3
+	end
 
-subsection Mesh parameters
+	set final time = 1.0
+	set nse theta = 0.5
+	set nse velocity degree = 2
+	set use locally conservative discretization = false
+	set temperature theta = 0.5
+	set temperature degree = 2
 
-  # number of refinements for coarse mesh
-  set coarse refinements = 3
-
-  # number of local refinements
-  set local refinements = 4
-  
 end
