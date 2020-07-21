@@ -20,13 +20,13 @@ checks
 # Process all source and header files:
 #
 process "test include source" \
-  ".*\.(cc|cxx|h|tpp)" format_file
+  ".*\.(cc|cxx|h|hpp|tpp)" format_file
 
 #
 # Fix permissions and convert to unix line ending if necessary:
 #
 process "test include source" \
-  ".*\.(cc|cxx|h|tpp|md)" fix_permissions
+  ".*\.(cc|cxx|h|hpp|tpp|md)" fix_permissions
 
 process "test include source" \
-  ".*\.(cc|h|cu|cuh|inst.in|cmake)" dos_to_unix
+  ".*\.(cc|cxx|h|hpp|tpp|cu|cuh|inst.in|cmake)" dos_to_unix

@@ -16,9 +16,9 @@ include_directories(${AquaPlanet_INCLUDE_DIR})
 #file(GLOB_RECURSE AquaPlanet_TARGET_LIB_SRC  "*.cc") # source files
 #set(AquaPlanet_TARGET_LIB_SRC ${AquaPlanet_TARGET_LIB_SRC})
 set(AquaPlanet_Boussinesq_TARGET_LIB_SRC
-	core/aqua_planet.cc
-	core/boussinesq_model.cc
-	model_data/boussinesq_model_data.cc)
+	core/dycore_planet.inst.cc
+	core/boussinesq_model.inst.cc
+	core/boussineq_model_assembly.inst.cc)
 
 print_all_args (
   ${AquaPlanet_Boussinesq_TARGET_LIB_SRC}

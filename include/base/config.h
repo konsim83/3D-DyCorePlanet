@@ -2,9 +2,16 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 #include <iomanip>
+#include <iostream>
 #include <limits>
+#include <string>
 #include <type_traits>
+
+
+#define NO_PHYSICAL_CONST
+
 
 /*!
  * @namespace LA
@@ -23,25 +30,24 @@ namespace LA
 #endif
 } // namespace LA
 
-
-#define AQUAPLANET_OPEN_NAMESPACE \
-  namespace AquaPlanet            \
+#define DYCOREPLANET_OPEN_NAMESPACE \
+  namespace DyCorePlanet            \
   {
-#define AQUAPLANET_CLOSE_NAMESPACE }
+#define DYCOREPLANET_CLOSE_NAMESPACE }
 
 
 /*!
- * @namespace AquaPlanet
+ * @namespace DyCorePlanet
  *
  * Namespace containing functions and classes to simulate a 3D aqua-planet. We
- * provide the dealii namespace instide AquaPlanet since it provides the base
+ * provide the dealii namespace inside DyCorePlanet since it provides the base
  * functionality for simulations.
  */
-namespace AquaPlanet
+namespace DyCorePlanet
 {
   // Provide dealii
   using namespace dealii;
-} // namespace AquaPlanet
+} // namespace DyCorePlanet
 
 
 
