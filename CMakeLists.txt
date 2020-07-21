@@ -51,6 +51,12 @@ ADD_CUSTOM_TARGET(indent
   COMMAND ./contrib/utilities/indent
   COMMENT "Indenting all C++ source and header files."
   )
+  
+ADD_CUSTOM_TARGET(documentation
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  COMMAND ./contrib/utilities/build_docs
+  COMMENT "Building doxygen documentation."
+  ) 
 
 set(PROJECT_NAME AquaPlanet)
 

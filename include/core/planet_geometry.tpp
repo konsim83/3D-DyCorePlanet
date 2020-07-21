@@ -1,33 +1,39 @@
-#include <core/aqua_planet.h>
+#include <core/planet_geometry.h>
 
-AQUAPLANET_OPEN_NAMESPACE
+DYCOREPLANET_OPEN_NAMESPACE
 
-AquaPlanet::AquaPlanet(double inner_radius, double outer_radius)
+template <int dim>
+PlanetGeometry<dim>::PlanetGeometry(double inner_radius, double outer_radius)
   : mpi_communicator(MPI_COMM_WORLD)
-  , pcout(std::cout, (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0))
+  , pcout(std::cout, (Utilities::MPI::this_mpi_process(mpi_communicator) == 0))
   , computing_timer(mpi_communicator,
                     pcout,
                     TimerOutput::summary,
                     TimerOutput::wall_times)
   , triangulation(mpi_communicator,
-                  typename Triangulation<3>::MeshSmoothing(
-                    Triangulation<3>::smoothing_on_refinement |
-                    Triangulation<3>::smoothing_on_coarsening))
-  , center(0, 0, 0)
+                  typename Triangulation<dim>::MeshSmoothing(
+                    Triangulation<dim>::smoothing_on_refinement |
+                    Triangulation<dim>::smoothing_on_coarsening))
+  , center(Point<dim>()) // origin
   , inner_radius(inner_radius)
   , outer_radius(outer_radius)
   , boundary_description(center)
 {
+  TimerOutput::Scope timing_section(
+    computing_timer, "PlanetGeometry - constructor with grid generation");
+
   GridGenerator::hyper_shell(triangulation, center, inner_radius, outer_radius);
 
   triangulation.set_all_manifold_ids_on_boundary(0);
   triangulation.set_manifold(0, boundary_description);
 
-  typename Triangulation<3>::active_cell_iterator cell = triangulation
-                                                           .begin_active(),
-                                                  endc = triangulation.end();
+  typename Triangulation<dim>::active_cell_iterator cell = triangulation
+                                                             .begin_active(),
+                                                    endc = triangulation.end();
   for (; cell != endc; ++cell)
     cell->set_all_manifold_ids(0);
+
+  global_Omega_diameter = GridTools::diameter(triangulation);
 
   pcout << "   Number of active cells:       " << triangulation.n_active_cells()
         << std::endl;
@@ -35,14 +41,19 @@ AquaPlanet::AquaPlanet(double inner_radius, double outer_radius)
 
 
 
-AquaPlanet::~AquaPlanet()
+template <int dim>
+PlanetGeometry<dim>::~PlanetGeometry()
 {}
 
 
 
+template <int dim>
 void
-AquaPlanet::refine_global(unsigned int n_refine)
+PlanetGeometry<dim>::refine_global(unsigned int n_refine)
 {
+  TimerOutput::Scope timing_section(computing_timer,
+                                    "PlanetGeometry - global refinement");
+
   triangulation.refine_global(n_refine);
 
   pcout << "   Number of active cells after global refinement:       "
@@ -51,10 +62,14 @@ AquaPlanet::refine_global(unsigned int n_refine)
 
 
 
+template <int dim>
 void
-AquaPlanet::write_mesh_vtu() const
+PlanetGeometry<dim>::write_mesh_vtu()
 {
-  DataOut<3> data_out;
+  TimerOutput::Scope timing_section(computing_timer,
+                                    "PlanetGeometry - write mesh to disk");
+
+  DataOut<dim> data_out;
   data_out.attach_triangulation(triangulation);
 
   // Add data to indicate subdomain
@@ -93,4 +108,4 @@ AquaPlanet::write_mesh_vtu() const
 }
 
 
-AQUAPLANET_CLOSE_NAMESPACE
+DYCOREPLANET_CLOSE_NAMESPACE

@@ -62,11 +62,18 @@ main(int argc, char *argv[])
 
   dealii::Utilities::MPI::MPI_InitFinalize mpi_initialization(
     argc, argv, dealii::numbers::invalid_unsigned_int);
+  //		  argc, argv, 1);
 
   try
     {
-      AquaPlanet::BoussinesqModel::Parameters parameters_boussinesq(input_file);
-      AquaPlanet::BoussinesqModel aqua_planet_boussinesq(parameters_boussinesq);
+      dealii::deallog.depth_console(2);
+
+      const int dim = 2;
+
+      DyCorePlanet::BoussinesqModel<dim>::Parameters parameters_boussinesq(
+        input_file);
+      DyCorePlanet::BoussinesqModel<dim> aqua_planet_boussinesq(
+        parameters_boussinesq);
       aqua_planet_boussinesq.run();
     }
 

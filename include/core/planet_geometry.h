@@ -12,6 +12,7 @@
 
 #include <deal.II/grid/cell_id.h>
 #include <deal.II/grid/grid_generator.h>
+#include <deal.II/grid/grid_tools.h>
 #include <deal.II/grid/manifold_lib.h>
 #include <deal.II/grid/tria_accessor.h>
 #include <deal.II/grid/tria_iterator.h>
@@ -25,12 +26,12 @@
 #include <string>
 
 
-// AquaPlanet headers
+// DyCorePlanet headers
 #include <base/config.h>
-#include <model_data/boussinesq_model_data.h>
+#include <model_data/boussinesq_model_data.hpp>
 
 
-AQUAPLANET_OPEN_NAMESPACE
+DYCOREPLANET_OPEN_NAMESPACE
 
 
 /*!
@@ -38,18 +39,19 @@ AQUAPLANET_OPEN_NAMESPACE
  * is a 3D spherical shell. Derived classes will implement different model
  * details.
  */
-class AquaPlanet
+template <int dim>
+class PlanetGeometry
 {
 public:
   /*!
    * Constructor of mesh handler for spherical shell.
    */
-  AquaPlanet(double inner_radius, double outer_radius);
-  ~AquaPlanet();
+  PlanetGeometry(double inner_radius, double outer_radius);
+  ~PlanetGeometry();
 
 protected:
   void
-  write_mesh_vtu() const;
+  write_mesh_vtu();
 
   void
   refine_global(unsigned int n_refine);
@@ -59,12 +61,19 @@ protected:
   ConditionalOStream pcout;
   TimerOutput        computing_timer;
 
-  parallel::distributed::Triangulation<3> triangulation;
+  parallel::distributed::Triangulation<dim> triangulation;
 
-  const Point<3> center;
-  const double   inner_radius, outer_radius;
+  const Point<dim> center;
+  const double     inner_radius, outer_radius;
 
-  const SphericalManifold<3> boundary_description;
+  double global_Omega_diameter;
+
+  SphericalManifold<dim> boundary_description;
 };
 
-AQUAPLANET_CLOSE_NAMESPACE
+
+// Extern template instantiations
+extern template class PlanetGeometry<2>;
+extern template class PlanetGeometry<3>;
+
+DYCOREPLANET_CLOSE_NAMESPACE

@@ -4,10 +4,14 @@ subsection Boussinesq Model
 		set initial global refinement = 3
 	end
 
-	set final time = 1.0
+	set final time = 0.2
+
 	set nse theta = 0.5
 	set nse velocity degree = 2
 	set use locally conservative discretization = false
+	
+	set use schur complement solver = false
+
 	set temperature theta = 0.5
 	set temperature degree = 2
 
