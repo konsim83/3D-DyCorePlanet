@@ -581,7 +581,7 @@ CoreModelData::Boussinesq::coriolis_vector(const Point<dim> &p)
 
   z[0]   = 0;
   z[1]   = 0;
-  ze[-1] = reference_omega;
+  z[dim-1] = reference_omega;
 
   return z;
 }
