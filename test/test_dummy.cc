@@ -1,5 +1,4 @@
-// This program tests the functionality of my_vector_tools (parallel
-// and serial projection on FE spaces).
+// This program is just a dummy test.
 
 
 // Deal.ii

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <deal.II/base/config.h>
+
 #include <algorithm>
 #include <cmath>
 #include <fstream>
@@ -10,15 +12,10 @@
 #include <type_traits>
 
 
-#define NO_PHYSICAL_CONST
-
-
 /*!
  * @namespace LA
  *
- * @brief Namespace for Trilinoswrappers.
- *
- *
+ * @brief Namespace for TrilinosWrappers.
  */
 namespace LA
 {

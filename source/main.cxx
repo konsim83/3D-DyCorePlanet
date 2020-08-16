@@ -66,7 +66,7 @@ main(int argc, char *argv[])
 
   try
     {
-      dealii::deallog.depth_console(2);
+      dealii::deallog.depth_console(1);
 
       const int dim = 2;
 

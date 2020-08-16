@@ -71,7 +71,8 @@
 #include <linear_algebra/inverse_matrix.hpp>
 #include <linear_algebra/preconditioner.h>
 #include <linear_algebra/schur_complement.hpp>
-#include <model_data/boussinesq_model_data.hpp>
+#include <model_data/boussinesq_model_data.h>
+#include <model_data/core_model_data.h>
 
 
 DYCOREPLANET_OPEN_NAMESPACE
@@ -192,11 +193,14 @@ public:
   {
     Parameters(const std::string &parameter_filename);
 
-    static void
+    void
     declare_parameters(ParameterHandler &prm);
 
     void
     parse_parameters(ParameterHandler &prm);
+
+    CoreModelData::ReferenceQuantities reference_quantities;
+    CoreModelData::PhysicalConstants   physical_constants;
 
     double       final_time;
     unsigned int initial_global_refinement;

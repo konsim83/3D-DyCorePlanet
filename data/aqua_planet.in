@@ -1,0 +1,124 @@
+subsection Boussinesq Model
+
+	subsection Mesh parameters
+		set initial global refinement = 4
+	end
+	
+	subsection Reference quantities
+		# Standard: 1.01325e+5 [Pa]
+		set pressure = 1.01325e+5
+		
+		# Standard: 7.272205e-5 [1/s]
+  		set omega = 7.272205e-5
+  		
+  		# Standard: 1.29 [kg / m^3]
+		set density = 1.29
+		
+		# Standard: 3.6e+3 [s]
+		set time = 3.6e+3
+		
+		# Standard: 10 [m/s]
+		set velocity = 10
+		
+		# Standard: 1e+4 [m]
+		set length = 1e+4
+		
+		# Standard: 273.15 [K]
+		set temperature_bottom = 273.15
+		
+		# Standard: 253.15 [K]
+		set temperature_top = 253.15
+		
+		# Standard: 5 [K]
+		set temperature_change = 5
+	end
+
+	set dimension = 2
+
+	set final time = 15
+
+	set nse theta = 0.5
+	set nse velocity degree = 2
+	set use locally conservative discretization = false
+	
+	set use schur complement solver = false
+	set use direct solver = false
+
+	set temperature theta = 0.5
+	set temperature degree = 2
+
+end
+
+
+subsection Physical Constants
+
+	# Universal gas constant.
+	#
+	# Unit: [J/(mol*K)]
+    # Standard: 8.31446261815324 
+    set universal_gas_constant = 8.31446261815324
+
+    # Specific gas constant of dry air.
+    #
+    # Unit: [J/(kg*K)]     
+    # Standard: 287
+    set specific_gas_constant_dry = 287
+
+    # Dynamic viscosity (eta or mu) of air at bottom reference
+    # temperature.     
+    #
+    # Unit: [kg/(m*s)]
+    # Standard: 1.82e-5
+    set dynamic_viscosity = 1.82e-5
+
+    # Specific heat capacity of air under constant pressure.
+    #
+    # Unit: [J / (K*kg)]     
+    # Standard: 1.005
+    set specific_heat_p = 1.005
+
+    # Specific heat capacity of air under isochoric changes of state.
+    #
+    # Unit: [J / (K*kg)]
+    # Standard: 0.718
+    set specific_heat_v = 0.718
+
+    # Thermal conductivity (kappa, k or lambda) of air at bottom reference
+    # temperature.
+    #
+    # Unit: [W/(m*K)]
+    # Standard: 2.62e-2
+    set thermal_conductivity = 2.62e-2
+
+    # A good part of the earth's heat loss through the surface is due
+    # to the decay of radioactive elements (uranium, thorium,
+    # potassium).  
+    #
+    # Unit: [W / kg]
+    # Standard: 7.4e-12
+    set radiogenic_heating = 7.4e-12
+
+    # Gravity constant.
+    #
+    # Unit: [m/s^2]
+    # Standard: 9.81
+    set gravity_constant = 9.81
+
+    # Speed of sound.
+    #
+    # Unit: [m/s]
+    # Standard: 331.5
+    set speed_of_sound = 331.5
+
+    # Height of atmosphere (up to mesosphere)
+    #
+    # Unit: [m]
+    # Standard: 1.0e+5
+    set atm_height = 1.0e+5
+
+    # Inner earth radius
+    #
+    # Unit: [m]     
+    # Standard:  6.371000e+6
+    set R0 = 6.371000e+6
+end
