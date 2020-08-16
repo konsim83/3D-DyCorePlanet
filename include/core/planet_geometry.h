@@ -28,7 +28,7 @@
 
 // DyCorePlanet headers
 #include <base/config.h>
-#include <model_data/boussinesq_model_data.hpp>
+#include <model_data/boussinesq_model_data.h>
 
 
 DYCOREPLANET_OPEN_NAMESPACE

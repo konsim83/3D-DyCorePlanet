@@ -10,7 +10,9 @@ DYCOREPLANET_OPEN_NAMESPACE
 template <int dim>
 BoussinesqModel<dim>::Parameters::Parameters(
   const std::string &parameter_filename)
-  : final_time(1.0)
+  : reference_quantities(parameter_filename)
+  , physical_constants(parameter_filename, reference_quantities)
+  , final_time(1.0)
   , initial_global_refinement(2)
   , nse_theta(0.5)
   , nse_velocity_degree(2)
@@ -39,6 +41,11 @@ BoussinesqModel<dim>::Parameters::Parameters(
                   /* last_line = */ "",
                   /* skip_undefined = */ true);
   parse_parameters(prm);
+
+  //  reference_quantities =
+  //  CoreModelData::ReferenceQuantities(parameter_filename); physical_constants
+  //  = CoreModelData::PhysicalConstants(physical_constants_file,
+  //                                                        reference_quantities);
 }
 
 
@@ -151,8 +158,8 @@ BoussinesqModel<dim>::Parameters::parse_parameters(ParameterHandler &prm)
 
 template <int dim>
 BoussinesqModel<dim>::BoussinesqModel(Parameters &parameters_)
-  : PlanetGeometry<dim>(CoreModelData::Boussinesq::R0,
-                        CoreModelData::Boussinesq::R1)
+  : PlanetGeometry<dim>(parameters_.physical_constants.R0,
+                        parameters_.physical_constants.R1)
   , parameters(parameters_)
   , mapping(3)
   , nse_fe(FE_Q<dim>(parameters.nse_velocity_degree),
@@ -166,7 +173,7 @@ BoussinesqModel<dim>::BoussinesqModel(Parameters &parameters_)
   , nse_dof_handler(this->triangulation)
   , temperature_fe(parameters.temperature_degree)
   , temperature_dof_handler(this->triangulation)
-  , time_step(0.01)
+  , time_step(0.2)
   , timestep_number(0)
 {
   TimerOutput::Scope timing_section(
@@ -176,7 +183,7 @@ BoussinesqModel<dim>::BoussinesqModel(Parameters &parameters_)
    * Rescale the original this->triangulation to the one scaled by the reference
    * length.
    */
-  GridTools::scale(1 / CoreModelData::Boussinesq::reference_length,
+  GridTools::scale(1 / parameters.reference_quantities.length,
                    this->triangulation);
 }
 
@@ -391,8 +398,10 @@ BoussinesqModel<dim>::setup_dofs()
     // No-flux on upper boundary
     std::set<types::boundary_id> no_normal_flux_boundaries;
     no_normal_flux_boundaries.insert(1);
+
     VectorTools::compute_no_normal_flux_constraints(
       nse_dof_handler, 0, no_normal_flux_boundaries, nse_constraints, mapping);
+
     nse_constraints.close();
   }
 
@@ -408,8 +417,11 @@ BoussinesqModel<dim>::setup_dofs()
     VectorTools::interpolate_boundary_values(
       temperature_dof_handler,
       0,
-      CoreModelData::Boussinesq::TemperatureInitialValues<dim>(),
+      CoreModelData::Boussinesq::TemperatureInitialValues<dim>(
+        parameters.physical_constants.R0, parameters.physical_constants.R1),
       temperature_constraints);
+
+    temperature_constraints.close();
   }
 
   /*
@@ -458,7 +470,10 @@ BoussinesqModel<dim>::local_assemble_nse_preconditioner(
   const FEValuesExtractors::Scalar pressure(dim);
 
   const double one_over_reynolds_number =
-    (1. / CoreModelData::Boussinesq::get_reynolds_number());
+    (1. / CoreModelData::get_reynolds_number(
+            parameters.reference_quantities.velocity,
+            parameters.reference_quantities.length,
+            parameters.physical_constants.kinematic_viscosity));
 
   scratch.nse_fe_values.reinit(cell);
 
@@ -594,7 +609,10 @@ BoussinesqModel<dim>::local_assemble_nse_system(
   const FEValuesExtractors::Scalar pressure(dim);
 
   const double one_over_reynolds_number =
-    (1. / CoreModelData::Boussinesq::get_reynolds_number());
+    (1. / CoreModelData::get_reynolds_number(
+            parameters.reference_quantities.velocity,
+            parameters.reference_quantities.length,
+            parameters.physical_constants.kinematic_viscosity));
 
   scratch.nse_fe_values.reinit(cell);
 
@@ -620,8 +638,10 @@ BoussinesqModel<dim>::local_assemble_nse_system(
   for (unsigned int q = 0; q < n_q_points; ++q)
     {
       const double old_temperature = scratch.old_temperature_values[q];
-      const double density_scaling =
-        CoreModelData::Boussinesq::density_scaling(old_temperature);
+      const double density_scaling = CoreModelData::density_scaling(
+        parameters.physical_constants.expansion_coefficient,
+        old_temperature,
+        parameters.reference_quantities.temperature_bottom);
       const Tensor<1, dim> old_velocity = scratch.old_velocity_values[q];
       const Tensor<2, dim> old_velocity_grads =
         transpose(scratch.old_velocity_grads[q]);
@@ -640,8 +660,9 @@ BoussinesqModel<dim>::local_assemble_nse_system(
         }
 
       const Tensor<1, dim> coriolis =
-        CoreModelData::Boussinesq::coriolis_vector(
-          scratch.nse_fe_values.quadrature_point(q));
+        CoreModelData::coriolis_vector(scratch.nse_fe_values.quadrature_point(
+                                         q),
+                                       parameters.reference_quantities.omega);
 
       /*
        * Move everything to the LHS here.
@@ -657,7 +678,7 @@ BoussinesqModel<dim>::local_assemble_nse_system(
                  (old_velocity * scratch.grads_phi_u[j] +
                   scratch.phi_u[j] * old_velocity_grads) // linearized advection
              + (dim == 2 ?
-                  -time_step * 2 * CoreModelData::Boussinesq::reference_omega *
+                  -time_step * 2 * parameters.reference_quantities.omega *
                     scratch.phi_u[i] * cross_product_2d(scratch.phi_u[j]) :
                   time_step * 2 * scratch.phi_u[i] *
                     cross_product_3d(coriolis,
@@ -669,8 +690,9 @@ BoussinesqModel<dim>::local_assemble_nse_system(
              ) *
             scratch.nse_fe_values.JxW(q);
 
-      const Tensor<1, dim> gravity = CoreModelData::Boussinesq::gravity_vector(
-        scratch.nse_fe_values.quadrature_point(q));
+      const Tensor<1, dim> gravity = CoreModelData::gravity_vector(
+        scratch.nse_fe_values.quadrature_point(q),
+        parameters.physical_constants.gravity_constant);
 
       /*
        * This is only the RHS
@@ -771,7 +793,10 @@ BoussinesqModel<dim>::local_assemble_temperature_matrix(
     scratch.temperature_fe_values.n_quadrature_points;
 
   const double one_over_peclet_number =
-    (1. / CoreModelData::Boussinesq::get_peclet_number());
+    (1. / CoreModelData::get_peclet_number(
+            parameters.reference_quantities.velocity,
+            parameters.reference_quantities.length,
+            parameters.physical_constants.thermal_diffusivity));
 
   scratch.temperature_fe_values.reinit(cell);
 
@@ -914,7 +939,10 @@ BoussinesqModel<dim>::local_assemble_temperature_rhs(
     nse_solution, scratch.old_velocity_values);
 
   const double one_over_peclet_number =
-    (1. / CoreModelData::Boussinesq::get_peclet_number());
+    (1. / CoreModelData::get_peclet_number(
+            parameters.reference_quantities.velocity,
+            parameters.reference_quantities.length,
+            parameters.physical_constants.thermal_diffusivity));
 
   for (unsigned int q = 0; q < n_q_points; ++q)
     {
@@ -1575,40 +1603,67 @@ template <int dim>
 void
 BoussinesqModel<dim>::print_paramter_info() const
 {
-  this->pcout
-    << "-------------------- Paramter info --------------------" << std::endl
-    << "Earth radius                         :   "
-    << CoreModelData::Boussinesq::R0 << std::endl
-    << "Atmosphere height                    :   "
-    << CoreModelData::Boussinesq::atm_height << std::endl
-    << std::endl
-    << "Reference pressure                   :   "
-    << CoreModelData::Boussinesq::reference_pressure << std::endl
-    << "Reference length                     :   "
-    << CoreModelData::Boussinesq::reference_length << std::endl
-    << "Reference velocity                   :   "
-    << CoreModelData::Boussinesq::reference_velocity << std::endl
-    << "Reference time                       :   "
-    << CoreModelData::Boussinesq::reference_time << std::endl
-    << "Atmosphere temperature (bottom)      :   "
-    << CoreModelData::Boussinesq::reference_temperature_bottom << std::endl
-    << "Atmosphere temperature (top)         :   "
-    << CoreModelData::Boussinesq::reference_temperature_top << std::endl
-    << "Atmosphere temperature change        :   "
-    << CoreModelData::Boussinesq::reference_temperature_change << std::endl
-    << std::endl
-    << "Reynolds number (NSE)                :   "
-    << CoreModelData::Boussinesq::get_reynolds_number() << std::endl
-    << "Peclet number (NSE)                  :   "
-    << CoreModelData::Boussinesq::get_peclet_number() << std::endl
-    << "Grashoff number (NSE)                :   "
-    << CoreModelData::Boussinesq::get_grashoff_number(dim) << std::endl
-    << "Prandtl number (NSE)                 :   "
-    << CoreModelData::Boussinesq::get_prandtl_number() << std::endl
-    << "Rayleigh number (NSE)                :   "
-    << CoreModelData::Boussinesq::get_rayleigh_number(dim) << std::endl
-    << "-------------------------------------------------------" << std::endl
-    << std::endl;
+  this->pcout << "-------------------- Paramter info --------------------"
+              << std::endl
+              << "Earth radius                         :   "
+              << parameters.physical_constants.R0 << std::endl
+              << "Atmosphere height                    :   "
+              << parameters.physical_constants.atm_height << std::endl
+              << std::endl
+              << "Reference pressure                   :   "
+              << parameters.reference_quantities.pressure << std::endl
+              << "Reference length                     :   "
+              << parameters.reference_quantities.length << std::endl
+              << "Reference velocity                   :   "
+              << parameters.reference_quantities.velocity << std::endl
+              << "Reference time                       :   "
+              << parameters.reference_quantities.time << std::endl
+              << "Atmosphere temperature (bottom)      :   "
+              << parameters.reference_quantities.temperature_bottom << std::endl
+              << "Atmosphere temperature (top)         :   "
+              << parameters.reference_quantities.temperature_top << std::endl
+              << "Atmosphere temperature change        :   "
+              << parameters.reference_quantities.temperature_change << std::endl
+              << std::endl
+              << "Reynolds number (NSE)                :   "
+              << CoreModelData::get_reynolds_number(
+                   parameters.reference_quantities.velocity,
+                   parameters.reference_quantities.length,
+                   parameters.physical_constants.kinematic_viscosity)
+              << std::endl
+              << "Peclet number (NSE)                  :   "
+              << CoreModelData::get_peclet_number(
+                   parameters.reference_quantities.velocity,
+                   parameters.reference_quantities.length,
+                   parameters.physical_constants.thermal_diffusivity)
+              << std::endl
+              << "Grashoff number (NSE)                :   "
+              << CoreModelData::get_grashoff_number(
+                   dim,
+                   parameters.physical_constants.gravity_constant,
+                   parameters.physical_constants.expansion_coefficient,
+                   parameters.reference_quantities.temperature_change,
+                   parameters.reference_quantities.length,
+                   parameters.physical_constants.kinematic_viscosity)
+              << std::endl
+              << "Prandtl number (NSE)                 :   "
+              << CoreModelData::get_prandtl_number(
+                   parameters.physical_constants.kinematic_viscosity,
+                   parameters.physical_constants.thermal_diffusivity)
+              << std::endl
+              << "Rayleigh number (NSE)                :   "
+              << CoreModelData::get_rayleigh_number(
+                   dim,
+                   parameters.physical_constants.gravity_constant,
+                   parameters.physical_constants.expansion_coefficient,
+                   parameters.reference_quantities.temperature_change,
+                   parameters.reference_quantities.length,
+                   parameters.physical_constants.kinematic_viscosity,
+                   parameters.physical_constants.thermal_diffusivity)
+              << std::endl
+              << "-------------------------------------------------------"
+              << std::endl
+              << std::endl;
 }
 
 
@@ -1640,25 +1695,26 @@ BoussinesqModel<dim>::run()
   TrilinosWrappers::MPI::Vector solution_tmp(
     temperature_dof_handler.locally_owned_dofs());
 
-  VectorTools::project(
-    temperature_dof_handler,
-    temperature_constraints,
-    QGauss<dim>(parameters.temperature_degree + 2),
-    CoreModelData::Boussinesq::TemperatureInitialValues<dim>(),
-    temperature_solution);
+  VectorTools::project(temperature_dof_handler,
+                       temperature_constraints,
+                       QGauss<dim>(parameters.temperature_degree + 2),
+                       CoreModelData::Boussinesq::TemperatureInitialValues<dim>(
+                         parameters.physical_constants.R0,
+                         parameters.physical_constants.R1),
+                       solution_tmp);
 
   old_nse_solution         = nse_solution;
   temperature_solution     = solution_tmp;
-  old_temperature_solution = temperature_solution;
+  old_temperature_solution = solution_tmp;
 
   output_results();
 
   double time_index = 0;
   do
     {
-      std::cout << "----------------------------------------" << std::endl
-                << "Time step " << timestep_number << ":  t=" << time_index
-                << std::endl;
+      this->pcout << "----------------------------------------" << std::endl
+                  << "Time step " << timestep_number << ":  t=" << time_index
+                  << std::endl;
 
       assemble_nse_system(time_index);
 
@@ -1678,7 +1734,7 @@ BoussinesqModel<dim>::run()
       old_nse_solution         = nse_solution;
       old_temperature_solution = temperature_solution;
 
-      std::cout << "----------------------------------------" << std::endl;
+      this->pcout << "----------------------------------------" << std::endl;
     }
   while (time_index <= parameters.final_time);
 }
