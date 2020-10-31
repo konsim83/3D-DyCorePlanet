@@ -68,13 +68,25 @@ main(int argc, char *argv[])
     {
       dealii::deallog.depth_console(1);
 
-      const int dim = 2;
+      DyCorePlanet::CoreModelData::Parameters parameters_boussinesq(input_file);
 
-      DyCorePlanet::BoussinesqModel<dim>::Parameters parameters_boussinesq(
-        input_file);
-      DyCorePlanet::BoussinesqModel<dim> aqua_planet_boussinesq(
-        parameters_boussinesq);
-      aqua_planet_boussinesq.run();
+      if (parameters_boussinesq.space_dimension == 2)
+        {
+          DyCorePlanet::BoussinesqModel<2> aqua_planet_boussinesq(
+            parameters_boussinesq);
+          aqua_planet_boussinesq.run();
+        }
+      else if (parameters_boussinesq.space_dimension == 3)
+        {
+          DyCorePlanet::BoussinesqModel<3> aqua_planet_boussinesq(
+            parameters_boussinesq);
+          aqua_planet_boussinesq.run();
+        }
+      else
+        {
+          std::cerr << "Invalid space dimension." << std::endl;
+          exit(1);
+        }
     }
 
   catch (std::exception &exc)

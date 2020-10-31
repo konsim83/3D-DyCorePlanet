@@ -59,38 +59,52 @@ CoreModelData::PhysicalConstants::declare_parameters(ParameterHandler &prm)
                       "287.0",
                       Patterns::Double(0),
                       "Specific gas constant of dry air.");
+
+    prm.declare_entry("expansion coefficient",
+                      "0.003661",
+                      Patterns::Double(0),
+                      "Thermal expansion coefficient std: ideal gas.");
+
     prm.declare_entry("dynamic_viscosity",
                       "1.82e-5",
                       Patterns::Double(0),
                       "Dynamic viscosity.");
+
     prm.declare_entry("specific_heat_p",
                       "1.005",
                       Patterns::Double(0),
                       "Specific heat constant (isobaric)");
+
     prm.declare_entry("specific_heat_v",
                       "0.718",
                       Patterns::Double(0),
                       "Specific heat constant (isochoric).");
+
     prm.declare_entry("thermal_conductivity",
                       "2.62e-2",
                       Patterns::Double(0),
                       "Thermal conductivity.");
+
     prm.declare_entry("radiogenic_heating",
                       "7.4e-12",
                       Patterns::Double(0),
                       "Radiogenic heating.");
+
     prm.declare_entry("gravity_constant",
                       "9.81",
                       Patterns::Double(0),
                       "Gravity constant");
+
     prm.declare_entry("speed_of_sound",
                       "331.5",
                       Patterns::Double(0),
                       "Speed of sound.");
+
     prm.declare_entry("atm_height",
                       "1.0e+5",
                       Patterns::Double(0),
                       "Height of atmosphere.");
+
     prm.declare_entry("R0",
                       "6.371000e+6",
                       Patterns::Double(0),
@@ -110,8 +124,7 @@ CoreModelData::PhysicalConstants::parse_parameters(
   {
     universal_gas_constant    = prm.get_double("universal_gas_constant");
     specific_gas_constant_dry = prm.get_double("specific_gas_constant_dry");
-
-    expansion_coefficient = 1 / reference_quantities.temperature_bottom;
+    expansion_coefficient     = prm.get_double("expansion coefficient");
 
     dynamic_viscosity = prm.get_double("dynamic_viscosity");
 

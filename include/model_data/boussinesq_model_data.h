@@ -83,7 +83,43 @@ namespace CoreModelData
        */
       TemperatureInitialValues(const double R0, const double R1)
         : Function<dim>(1)
+        , rotate(false)
+        , alpha_(numbers::PI / 3)
+        , beta_(numbers::PI / 6)
+        , gamma_(numbers::PI / 4)
       {
+        if (rotate)
+          {
+            rotation[0][0] = cos(alpha_) * cos(gamma_) -
+                             sin(alpha_) * cos(beta_) * sin(gamma_);
+            rotation[0][1] = -cos(alpha_) * sin(gamma_) -
+                             sin(alpha_) * cos(beta_) * cos(gamma_);
+            rotation[0][2] = sin(alpha_) * sin(beta_);
+
+            rotation[1][0] = sin(alpha_) * cos(gamma_) +
+                             cos(alpha_) * cos(beta_) * sin(gamma_);
+            rotation[1][1] = -sin(alpha_) * sin(gamma_) +
+                             cos(alpha_) * cos(beta_) * cos(gamma_);
+            rotation[1][2] = -cos(alpha_) * sin(beta_);
+
+            rotation[2][0] = sin(beta_) * sin(gamma_);
+            rotation[2][1] = sin(beta_) * cos(gamma_);
+            rotation[2][2] = cos(beta_);
+          }
+        else
+          {
+            rotation[0][0] = 1;
+            rotation[0][1] = 0;
+            rotation[0][2] = 0;
+
+            rotation[1][0] = 0;
+            rotation[1][1] = 1;
+            rotation[1][2] = 0;
+
+            rotation[2][0] = 0;
+            rotation[2][1] = 0;
+            rotation[2][2] = 1;
+          }
         covariance_matrix = 0;
 
         for (unsigned int d = 0; d < dim; ++d)
@@ -91,8 +127,24 @@ namespace CoreModelData
             covariance_matrix[d][d] = 20 / ((R1 - R0) / 2);
           }
 
-        center1(0) = R0 + (R1 - R0) * 0.35;
-        center2(1) = R0 + (R1 - R0) * 0.65;
+        if (rotate)
+          {
+            Tensor<1, dim> center_tmp_1, center_tmp_2;
+
+            center_tmp_1[0] = R0 + (R1 - R0) * 0.35;
+            center_tmp_2[1] = R0 + (R1 - R0) * 0.65;
+
+            /*
+             * At this point centerX is still the origin
+             */
+            center1 += rotation * center_tmp_1 * transpose(rotation);
+            center2 += rotation * center_tmp_2 * transpose(rotation);
+          }
+        else
+          {
+            center1(0) = R0 + (R1 - R0) * 0.35;
+            center2(1) = R0 + (R1 - R0) * 0.65;
+          }
       }
 
       /*!
@@ -120,6 +172,18 @@ namespace CoreModelData
     private:
       Point<dim>     center1, center2;
       Tensor<2, dim> covariance_matrix;
+
+      const bool rotate;
+
+      /*!
+       * Euler angles
+       */
+      const double alpha_, beta_, gamma_;
+
+      /*!
+       * Rotation tensor.
+       */
+      Tensor<2, dim> rotation;
     };
 
     //////////////////////////////////////////////////
