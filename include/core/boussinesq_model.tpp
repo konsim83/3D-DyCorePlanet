@@ -1530,11 +1530,12 @@ BoussinesqModel<dim>::output_results()
 
   static int        out_index = 0;
   const std::string filename =
-    ("solution-" + Utilities::int_to_string(out_index, 5) + "." +
+    (parameters.filename_output + "-" + Utilities::int_to_string(out_index, 5) +
+     "." +
      Utilities::int_to_string(this->triangulation.locally_owned_subdomain(),
                               4) +
      ".vtu");
-  std::ofstream output(filename);
+  std::ofstream output(parameters.dirname_output + "/" + filename);
   data_out.write_vtu(output);
 
   /*
@@ -1546,13 +1547,15 @@ BoussinesqModel<dim>::output_results()
       for (unsigned int i = 0;
            i < Utilities::MPI::n_mpi_processes(MPI_COMM_WORLD);
            ++i)
-        filenames.push_back(std::string("solution-") +
+        filenames.push_back(std::string(parameters.filename_output + "-") +
                             Utilities::int_to_string(out_index, 5) + "." +
                             Utilities::int_to_string(i, 4) + ".vtu");
 
       const std::string pvtu_master_filename =
-        ("solution-" + Utilities::int_to_string(out_index, 5) + ".pvtu");
-      std::ofstream pvtu_master(pvtu_master_filename);
+        (parameters.filename_output + "-" +
+         Utilities::int_to_string(out_index, 5) + ".pvtu");
+      std::ofstream pvtu_master(parameters.dirname_output + "/" +
+                                pvtu_master_filename);
       data_out.write_pvtu_record(pvtu_master, filenames);
     }
   out_index++;
@@ -1671,6 +1674,14 @@ BoussinesqModel<dim>::run()
   temperature_solution     = solution_tmp;
   old_temperature_solution = solution_tmp;
 
+  try
+    {
+      Tools::create_data_directory(parameters.dirname_output);
+    }
+  catch (std::runtime_error &e)
+    {
+      // No exception handling here.
+    }
   output_results();
 
   double time_index = 0;

@@ -81,71 +81,8 @@ namespace CoreModelData
       /*!
        * Constructor.
        */
-      TemperatureInitialValues(const double R0, const double R1)
-        : Function<dim>(1)
-        , rotate(false)
-        , alpha_(numbers::PI / 3)
-        , beta_(numbers::PI / 6)
-        , gamma_(numbers::PI / 4)
-      {
-        if (rotate)
-          {
-            rotation[0][0] = cos(alpha_) * cos(gamma_) -
-                             sin(alpha_) * cos(beta_) * sin(gamma_);
-            rotation[0][1] = -cos(alpha_) * sin(gamma_) -
-                             sin(alpha_) * cos(beta_) * cos(gamma_);
-            rotation[0][2] = sin(alpha_) * sin(beta_);
+      TemperatureInitialValues(const double R0, const double R1);
 
-            rotation[1][0] = sin(alpha_) * cos(gamma_) +
-                             cos(alpha_) * cos(beta_) * sin(gamma_);
-            rotation[1][1] = -sin(alpha_) * sin(gamma_) +
-                             cos(alpha_) * cos(beta_) * cos(gamma_);
-            rotation[1][2] = -cos(alpha_) * sin(beta_);
-
-            rotation[2][0] = sin(beta_) * sin(gamma_);
-            rotation[2][1] = sin(beta_) * cos(gamma_);
-            rotation[2][2] = cos(beta_);
-          }
-        else
-          {
-            rotation[0][0] = 1;
-            rotation[0][1] = 0;
-            rotation[0][2] = 0;
-
-            rotation[1][0] = 0;
-            rotation[1][1] = 1;
-            rotation[1][2] = 0;
-
-            rotation[2][0] = 0;
-            rotation[2][1] = 0;
-            rotation[2][2] = 1;
-          }
-        covariance_matrix = 0;
-
-        for (unsigned int d = 0; d < dim; ++d)
-          {
-            covariance_matrix[d][d] = 20 / ((R1 - R0) / 2);
-          }
-
-        if (rotate)
-          {
-            Tensor<1, dim> center_tmp_1, center_tmp_2;
-
-            center_tmp_1[0] = R0 + (R1 - R0) * 0.35;
-            center_tmp_2[1] = R0 + (R1 - R0) * 0.65;
-
-            /*
-             * At this point centerX is still the origin
-             */
-            center1 += rotation * center_tmp_1 * transpose(rotation);
-            center2 += rotation * center_tmp_2 * transpose(rotation);
-          }
-        else
-          {
-            center1(0) = R0 + (R1 - R0) * 0.35;
-            center2(1) = R0 + (R1 - R0) * 0.65;
-          }
-      }
 
       /*!
        * Return temperature value at a single point.
@@ -232,113 +169,26 @@ namespace CoreModelData
 
 } // namespace CoreModelData
 
+/*
+ * Forward declarations (necessary due to subsequent specializations)
+ */
+template <>
+CoreModelData::Boussinesq::TemperatureInitialValues<
+  2>::TemperatureInitialValues(const double R0, const double R1);
+template <>
+CoreModelData::Boussinesq::TemperatureInitialValues<
+  3>::TemperatureInitialValues(const double R0, const double R1);
 
-template <int dim>
-double
-CoreModelData::Boussinesq::TemperatureInitialValues<dim>::value(
-  const Point<dim> &p,
-  const unsigned int) const
-{
-  //   const double r = p.norm();
-  //   const double h = R1 - R0;
-  //   const double s = (r - R0) / h;
-  //   const double q =
-  //    (dim == 2) ? 1.0 : std::max(0.0, cos(numbers::PI * abs(p(2) / R1)));
-  //   const double phi = std::atan2(p(0), p(1));
-  //   const double tau = s + s * (1 - s) * sin(6 * phi) * q;
-  //
-  //   return reference_temperature_bottom * (1.0 - tau) +
-  //         reference_temperature_top * tau;
+/*
+ * Extern template instantiations
+ */
+extern template class CoreModelData::Boussinesq::VelocityInitialValues<2>;
+extern template class CoreModelData::Boussinesq::VelocityInitialValues<3>;
 
-  double temperature =
-    sqrt(determinant(covariance_matrix)) *
-      exp(-0.5 *
-          scalar_product(p - center1, covariance_matrix * (p - center1))) /
-      sqrt(std::pow(2 * numbers::PI, dim)) +
-    sqrt(determinant(covariance_matrix)) *
-      exp(-0.5 *
-          scalar_product(p - center2, covariance_matrix * (p - center2))) /
-      sqrt(std::pow(2 * numbers::PI, dim));
+extern template class CoreModelData::Boussinesq::TemperatureInitialValues<2>;
+extern template class CoreModelData::Boussinesq::TemperatureInitialValues<3>;
 
-  return temperature;
-}
-
-
-
-template <int dim>
-void
-CoreModelData::Boussinesq::TemperatureInitialValues<dim>::value_list(
-  const std::vector<Point<dim>> &points,
-  std::vector<double> &          values,
-  const unsigned int) const
-{
-  Assert(points.size() == values.size(),
-         ExcDimensionMismatch(points.size(), values.size()));
-
-  for (unsigned int p = 0; p < points.size(); ++p)
-    {
-      values[p] = value(points[p]);
-    }
-}
-
-
-
-template <int dim>
-double
-CoreModelData::Boussinesq::TemperatureRHS<dim>::value(const Point<dim> &p,
-                                                      const unsigned int) const
-{
-  return 0;
-}
-
-
-
-template <int dim>
-void
-CoreModelData::Boussinesq::TemperatureRHS<dim>::value_list(
-  const std::vector<Point<dim>> &points,
-  std::vector<double> &          values,
-  const unsigned int) const
-{
-  Assert(points.size() == values.size(),
-         ExcDimensionMismatch(points.size(), values.size()));
-
-  for (unsigned int p = 0; p < points.size(); ++p)
-    {
-      values[p] = value(points[p]);
-    }
-}
-
-
-
-template <int dim>
-Tensor<1, dim>
-CoreModelData::Boussinesq::VelocityInitialValues<dim>::value(
-  const Point<dim> &) const
-{
-  // This initializes to zero.
-  Tensor<1, dim> value;
-
-  return value;
-}
-
-
-
-template <int dim>
-void
-CoreModelData::Boussinesq::VelocityInitialValues<dim>::value_list(
-  const std::vector<Point<dim>> &points,
-  std::vector<Tensor<1, dim>> &  values) const
-{
-  Assert(points.size() == values.size(),
-         ExcDimensionMismatch(points.size(), values.size()));
-
-  for (unsigned int p = 0; p < points.size(); ++p)
-    {
-      values[p].clear();
-      values[p] = value(points[p]);
-    }
-}
-
+extern template class CoreModelData::Boussinesq::TemperatureRHS<2>;
+extern template class CoreModelData::Boussinesq::TemperatureRHS<3>;
 
 DYCOREPLANET_CLOSE_NAMESPACE

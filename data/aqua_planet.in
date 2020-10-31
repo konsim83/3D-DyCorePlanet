@@ -46,7 +46,12 @@ subsection Boussinesq Model
 
 	set temperature theta = 0.5
 	set temperature degree = 2
-
+	
+	# Base name of outputfile
+  	set filename output = boussinesq
+  	
+  	# Name of outputfile without ending
+  	set dirname output = data-output
 end
 
 

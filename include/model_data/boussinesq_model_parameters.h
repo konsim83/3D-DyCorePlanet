@@ -47,6 +47,9 @@ namespace CoreModelData
 
     double       temperature_theta;
     unsigned int temperature_degree;
+
+    std::string filename_output;
+    std::string dirname_output;
   };
 
 } // namespace CoreModelData

@@ -121,6 +121,16 @@ CoreModelData::Parameters::declare_parameters(ParameterHandler &prm)
       "2",
       Patterns::Integer(1),
       "The polynomial degree to use for the temperature variable.");
+
+    prm.declare_entry("filename output",
+                      "dycore",
+                      Patterns::FileName(),
+                      "Base filename for output.");
+
+    prm.declare_entry("dirname output",
+                      "data-output",
+                      Patterns::FileName(),
+                      "Name of output directory.");
   }
   prm.leave_subsection();
 }
@@ -154,6 +164,9 @@ CoreModelData::Parameters::parse_parameters(ParameterHandler &prm)
 
     temperature_theta  = prm.get_double("temperature theta");
     temperature_degree = prm.get_integer("temperature degree");
+
+    filename_output = prm.get("filename output");
+    dirname_output  = prm.get("dirname output");
   }
   prm.leave_subsection();
 }

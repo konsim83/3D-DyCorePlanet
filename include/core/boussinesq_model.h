@@ -63,6 +63,7 @@
 
 // AquaPlanet
 #include <base/config.h>
+#include <base/utilities.h>
 #include <core/boussineq_model_assembly.h>
 #include <core/planet_geometry.h>
 #include <linear_algebra/approximate_inverse.hpp>
