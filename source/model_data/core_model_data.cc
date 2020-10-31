@@ -62,19 +62,19 @@ double
 CoreModelData::density(const double density,
                        const double expansion_coefficient,
                        const double temperature,
-                       const double temperature_bottom)
+                       const double temperature_ref)
 {
   return density *
-         (1 - expansion_coefficient * (temperature - temperature_bottom));
+         (1 - expansion_coefficient * (temperature - temperature_ref));
 }
 
 
 double
 CoreModelData::density_scaling(const double expansion_coefficient,
                                const double temperature,
-                               const double temperature_bottom)
+                               const double temperature_ref)
 {
-  return (1 - expansion_coefficient * (temperature - temperature_bottom));
+  return (1 - expansion_coefficient * (temperature - temperature_ref));
 }
 
 DYCOREPLANET_CLOSE_NAMESPACE

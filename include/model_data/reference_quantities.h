@@ -57,14 +57,9 @@ namespace CoreModelData
     double length; /* m */
 
     /*!
-     * Reference temperature 273.15 K (0 degree Celsius) at bottom.
+     * Reference temperature 273.15 K (0 degree Celsius).
      */
-    double temperature_bottom; /* K */
-
-    /*!
-     * Reference temperature at top of atmosphere.
-     */
-    double temperature_top; /* K */
+    double temperature_ref; /* K */
 
     /*!
      * Reference temperature change.

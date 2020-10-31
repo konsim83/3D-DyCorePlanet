@@ -11,8 +11,7 @@ CoreModelData::ReferenceQuantities::ReferenceQuantities(
   , time(3.6e+3)
   , velocity(10)
   , length(1e+4)
-  , temperature_bottom(273.15)
-  , temperature_top(253.15)
+  , temperature_ref(273.15)
   , temperature_change(5)
 {
   ParameterHandler prm;
@@ -75,15 +74,10 @@ CoreModelData::ReferenceQuantities::declare_parameters(ParameterHandler &prm)
                         Patterns::Double(0),
                         "Reference length.");
 
-      prm.declare_entry("temperature_bottom",
+      prm.declare_entry("temperature",
                         "273.15",
                         Patterns::Double(0),
                         "Reference temperature at bottom.");
-
-      prm.declare_entry("temperature_top",
-                        "253.15",
-                        Patterns::Double(0),
-                        "Reference temperature at top.");
 
       prm.declare_entry("temperature_change",
                         "5",
@@ -110,8 +104,7 @@ CoreModelData::ReferenceQuantities::parse_parameters(ParameterHandler &prm)
       time               = prm.get_double("time");               /* s */
       velocity           = prm.get_double("velocity");           /* m/s */
       length             = prm.get_double("length");             /* m */
-      temperature_bottom = prm.get_double("temperature_bottom"); /* K */
-      temperature_top    = prm.get_double("temperature_top");    /* K */
+      temperature_ref    = prm.get_double("temperature");        /* K */
       temperature_change = prm.get_double("temperature_change"); /* K */
     }
     prm.leave_subsection();

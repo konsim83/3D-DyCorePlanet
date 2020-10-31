@@ -1,14 +1,6 @@
-# C++ Protoype of Stable Multiscale Finite Element Complexes
+# C++ Protoype of a 3D-Dynamical Core on a Hypershell 
 
 
-The C++ code of the *MsFEComplex* subprojects which serve as a demonstration of the method can be found in subfolders.
+This C++ code serves as a playground to experiment with multiscale methods for advection-dominated systems on spherical shells. The current prototype is a bouyancy Boussinesq system, i.e., an incompressible Navier-Stokes system with Coriolis force that is driven through density variations caused by temperature changes.
 
-To set up an Eclipse project using cmake enter the folder containing the problem implementation and type
-```
-mkdir build/
-cd build/
-cmake -DDEAL_II_DIR=~/path/to/dealii -G"Eclipse CDT4 - Unix Makefiles" -DCMAKE_ECLIPSE_MAKE_ARGUMENTS=-jN ..
-```
-Replace `N` with the number of cores of your machine and `/path/to/dealii` with the path containing the library.
-
-Please do not commit to the master branch directly. If you wish to make changes open a separate branch.
+It is planned to use stable (multiscale) reconstruction FEMs to investigate the feedback of small-scale parametrizations on 3D dynamical cores in the long run and to replace standard saddle point discretizations with different formulations using stable pairs of elements constructed in FEEC.

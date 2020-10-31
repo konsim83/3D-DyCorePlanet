@@ -3,161 +3,13 @@
 
 DYCOREPLANET_OPEN_NAMESPACE
 
-//////////////////////////////////////////////////////
-/// Boussinesq model parameters
-//////////////////////////////////////////////////////
-
-template <int dim>
-BoussinesqModel<dim>::Parameters::Parameters(
-  const std::string &parameter_filename)
-  : reference_quantities(parameter_filename)
-  , physical_constants(parameter_filename, reference_quantities)
-  , final_time(1.0)
-  , initial_global_refinement(2)
-  , nse_theta(0.5)
-  , nse_velocity_degree(2)
-  , use_locally_conservative_discretization(true)
-  , use_schur_complement_solver(true)
-  , use_direct_solver(false)
-  , temperature_theta(0.5)
-  , temperature_degree(2)
-{
-  ParameterHandler prm;
-  BoussinesqModel<dim>::Parameters::declare_parameters(prm);
-
-  std::ifstream parameter_file(parameter_filename);
-  if (!parameter_file)
-    {
-      parameter_file.close();
-      std::ofstream parameter_out(parameter_filename);
-      prm.print_parameters(parameter_out, ParameterHandler::Text);
-      AssertThrow(false,
-                  ExcMessage(
-                    "Input parameter file <" + parameter_filename +
-                    "> not found. Creating a template file of the same name."));
-    }
-  prm.parse_input(parameter_file,
-                  /* filename = */ "generated_parameter.in",
-                  /* last_line = */ "",
-                  /* skip_undefined = */ true);
-  parse_parameters(prm);
-
-  //  reference_quantities =
-  //  CoreModelData::ReferenceQuantities(parameter_filename); physical_constants
-  //  = CoreModelData::PhysicalConstants(physical_constants_file,
-  //                                                        reference_quantities);
-}
-
-
-
-template <int dim>
-void
-BoussinesqModel<dim>::Parameters::declare_parameters(ParameterHandler &prm)
-{
-  prm.enter_subsection("Boussinesq Model");
-  {
-    prm.enter_subsection("Mesh parameters");
-    {
-      prm.declare_entry("initial global refinement",
-                        "3",
-                        Patterns::Integer(0),
-                        "The number of global refinement steps performed on "
-                        "the initial coarse mesh, before the problem is first "
-                        "solved there.");
-    }
-    prm.leave_subsection();
-
-    prm.declare_entry("final time",
-                      "1.0",
-                      Patterns::Double(0),
-                      "The end time of the simulation in seconds.");
-
-    prm.declare_entry("nse theta",
-                      "0.5",
-                      Patterns::Double(0.0, 1.0),
-                      "Theta value for theta method.");
-
-    prm.declare_entry("nse velocity degree",
-                      "2",
-                      Patterns::Integer(1),
-                      "The polynomial degree to use for the velocity variables "
-                      "in the NSE system.");
-
-    prm.declare_entry(
-      "use locally conservative discretization",
-      "true",
-      Patterns::Bool(),
-      "Whether to use a Navier-Stokes discretization that is locally "
-      "conservative at the expense of a larger number of degrees "
-      "of freedom, or to go with a cheaper discretization "
-      "that does not locally conserve mass (although it is "
-      "globally conservative.");
-
-    prm.declare_entry(
-      "use schur complement solver",
-      "false",
-      Patterns::Bool(),
-      "Choose whether to use a preconditioned Schur complement solver or an iterative block system solver with block preconditioner.");
-
-    prm.declare_entry(
-      "use direct solver",
-      "false",
-      Patterns::Bool(),
-      "Choose whether to use a direct solver for the Navier-Stokes part.");
-
-    prm.declare_entry("temperature theta",
-                      "0.5",
-                      Patterns::Double(0.0, 1.0),
-                      "Theta value for theta method.");
-
-    prm.declare_entry(
-      "temperature degree",
-      "2",
-      Patterns::Integer(1),
-      "The polynomial degree to use for the temperature variable.");
-  }
-  prm.leave_subsection();
-}
-
-
-
-template <int dim>
-void
-BoussinesqModel<dim>::Parameters::parse_parameters(ParameterHandler &prm)
-{
-  prm.enter_subsection("Boussinesq Model");
-  {
-    prm.enter_subsection("Mesh parameters");
-    {
-      initial_global_refinement = prm.get_integer("initial global refinement");
-    }
-    prm.leave_subsection();
-
-    final_time = prm.get_double("final time");
-
-    nse_theta           = prm.get_double("nse theta");
-    nse_velocity_degree = prm.get_integer("nse velocity degree");
-    use_locally_conservative_discretization =
-      prm.get_bool("use locally conservative discretization");
-    use_schur_complement_solver = prm.get_bool("use schur complement solver");
-    use_direct_solver           = prm.get_bool("use direct solver");
-
-    temperature_theta  = prm.get_double("temperature theta");
-    temperature_degree = prm.get_integer("temperature degree");
-  }
-  prm.leave_subsection();
-}
-
-
 
 //////////////////////////////////////////////////////
 /// Boussinesq model
 //////////////////////////////////////////////////////
 
-
-
 template <int dim>
-BoussinesqModel<dim>::BoussinesqModel(Parameters &parameters_)
+BoussinesqModel<dim>::BoussinesqModel(CoreModelData::Parameters &parameters_)
   : PlanetGeometry<dim>(parameters_.physical_constants.R0,
                         parameters_.physical_constants.R1)
   , parameters(parameters_)
@@ -173,7 +25,6 @@ BoussinesqModel<dim>::BoussinesqModel(Parameters &parameters_)
   , nse_dof_handler(this->triangulation)
   , temperature_fe(parameters.temperature_degree)
   , temperature_dof_handler(this->triangulation)
-  , time_step(0.2)
   , timestep_number(0)
 {
   TimerOutput::Scope timing_section(
@@ -494,7 +345,7 @@ BoussinesqModel<dim>::local_assemble_nse_preconditioner(
         for (unsigned int j = 0; j < dofs_per_cell; ++j)
           data.local_matrix(i, j) +=
             (scratch.phi_u[i] * scratch.phi_u[j] +
-             time_step * one_over_reynolds_number *
+             parameters.time_step * one_over_reynolds_number *
                scalar_product(scratch.grad_phi_u[i], scratch.grad_phi_u[j]) +
              scratch.phi_p[i] * scratch.phi_p[j]) *
             scratch.nse_fe_values.JxW(q);
@@ -538,7 +389,7 @@ BoussinesqModel<dim>::assemble_nse_preconditioner(const double time_index)
     std::bind(&BoussinesqModel<dim>::copy_local_to_global_nse_preconditioner,
               this,
               std::placeholders::_1),
-    Assembly::Scratch::NSEPreconditioner<dim>(time_step,
+    Assembly::Scratch::NSEPreconditioner<dim>(parameters.time_step,
                                               time_index,
                                               nse_fe,
                                               quadrature_formula,
@@ -639,9 +490,9 @@ BoussinesqModel<dim>::local_assemble_nse_system(
     {
       const double old_temperature = scratch.old_temperature_values[q];
       const double density_scaling = CoreModelData::density_scaling(
-        parameters.physical_constants.expansion_coefficient,
+        parameters.reference_quantities.density,
         old_temperature,
-        parameters.reference_quantities.temperature_bottom);
+        parameters.reference_quantities.temperature_ref);
       const Tensor<1, dim> old_velocity = scratch.old_velocity_values[q];
       const Tensor<2, dim> old_velocity_grads =
         transpose(scratch.old_velocity_grads[q]);
@@ -671,18 +522,9 @@ BoussinesqModel<dim>::local_assemble_nse_system(
         for (unsigned int j = 0; j < dofs_per_cell; ++j)
           data.local_matrix(i, j) +=
             (scratch.phi_u[i] * scratch.phi_u[j] // mass term
-             + time_step *
+             + parameters.time_step *
                  (one_over_reynolds_number * 2 * scratch.grads_phi_u[i] *
                   scratch.grads_phi_u[j]) // eps(v):sigma(eps(u))
-             + time_step * scratch.phi_u[i] *
-                 (old_velocity * scratch.grads_phi_u[j] +
-                  scratch.phi_u[j] * old_velocity_grads) // linearized advection
-             + (dim == 2 ?
-                  -time_step * 2 * parameters.reference_quantities.omega *
-                    scratch.phi_u[i] * cross_product_2d(scratch.phi_u[j]) :
-                  time_step * 2 * scratch.phi_u[i] *
-                    cross_product_3d(coriolis,
-                                     scratch.phi_u[j])) // coriolis force)
              - (scratch.div_phi_u[i] *
                 scratch
                   .phi_p[j]) // div(v)*p ---> we solve for scaled pressure dt*p
@@ -700,7 +542,16 @@ BoussinesqModel<dim>::local_assemble_nse_system(
       for (unsigned int i = 0; i < dofs_per_cell; ++i)
         data.local_rhs(i) +=
           (scratch.phi_u[i] * old_velocity +
-           time_step * density_scaling * gravity * scratch.phi_u[i]) *
+           parameters.time_step * density_scaling * gravity * scratch.phi_u[i] -
+           parameters.time_step * scratch.phi_u[i] *
+             (old_velocity * old_velocity_grads) // advection at previous time
+           - (dim == 2 ? -parameters.time_step * 2 *
+                           parameters.reference_quantities.omega *
+                           scratch.phi_u[i] * cross_product_2d(old_velocity) :
+                         parameters.time_step * 2 * scratch.phi_u[i] *
+                           cross_product_3d(coriolis,
+                                            old_velocity)) // coriolis force)
+           ) *
           scratch.nse_fe_values.JxW(q);
     }
 
@@ -756,7 +607,7 @@ BoussinesqModel<dim>::assemble_nse_system(const double time_index)
     std::bind(&BoussinesqModel<dim>::copy_local_to_global_nse_system,
               this,
               std::placeholders::_1),
-    Assembly::Scratch::NSESystem<dim>(time_step,
+    Assembly::Scratch::NSESystem<dim>(parameters.time_step,
                                       time_index,
                                       nse_fe,
                                       mapping,
@@ -884,8 +735,11 @@ BoussinesqModel<dim>::assemble_temperature_matrix(const double time_index)
     std::bind(&BoussinesqModel<dim>::copy_local_to_global_temperature_matrix,
               this,
               std::placeholders::_1),
-    Assembly::Scratch::TemperatureMatrix<dim>(
-      time_step, time_index, temperature_fe, mapping, quadrature_formula),
+    Assembly::Scratch::TemperatureMatrix<dim>(parameters.time_step,
+                                              time_index,
+                                              temperature_fe,
+                                              mapping,
+                                              quadrature_formula),
     Assembly::CopyData::TemperatureMatrix<dim>(temperature_fe));
 
   temperature_mass_matrix.compress(VectorOperation::add);
@@ -960,9 +814,11 @@ BoussinesqModel<dim>::local_assemble_temperature_rhs(
         {
           data.local_rhs(i) +=
             (scratch.phi_T[i] * scratch.old_temperature_values[q] -
-             time_step * scratch.phi_T[i] * scratch.old_velocity_values[q] *
+             parameters.time_step / (parameters.NSE_solver_interval) *
+               scratch.phi_T[i] * scratch.old_velocity_values[q] *
                scratch.old_temperature_grads[q] -
-             time_step * gamma * scratch.phi_T[i]) *
+             parameters.time_step / (parameters.NSE_solver_interval) * gamma *
+               scratch.phi_T[i]) *
             scratch.temperature_fe_values.JxW(q);
 
           if (temperature_constraints.is_inhomogeneously_constrained(
@@ -971,7 +827,8 @@ BoussinesqModel<dim>::local_assemble_temperature_rhs(
               for (unsigned int j = 0; j < dofs_per_cell; ++j)
                 data.matrix_for_bc(j, i) +=
                   (scratch.phi_T[i] * scratch.phi_T[j] +
-                   time_step * one_over_peclet_number * scratch.grad_phi_T[i] *
+                   parameters.time_step / (parameters.NSE_solver_interval) *
+                     one_over_peclet_number * scratch.grad_phi_T[i] *
                      scratch.grad_phi_T[j]) *
                   scratch.temperature_fe_values.JxW(q);
             }
@@ -1001,7 +858,9 @@ BoussinesqModel<dim>::assemble_temperature_rhs(const double time_index)
   this->pcout << "   Assembling temperature right-hand side..." << std::flush;
 
   temperature_matrix.copy_from(temperature_mass_matrix);
-  temperature_matrix.add(time_step, temperature_stiffness_matrix);
+  temperature_matrix.add(parameters.time_step /
+                           (parameters.NSE_solver_interval),
+                         temperature_stiffness_matrix);
 
   if (rebuild_temperature_preconditioner == true)
     {
@@ -1033,7 +892,7 @@ BoussinesqModel<dim>::assemble_temperature_rhs(const double time_index)
     std::bind(&BoussinesqModel<dim>::copy_local_to_global_temperature_rhs,
               this,
               std::placeholders::_1),
-    Assembly::Scratch::TemperatureRHS<dim>(time_step,
+    Assembly::Scratch::TemperatureRHS<dim>(parameters.time_step,
                                            time_index,
                                            temperature_fe,
                                            nse_fe,
@@ -1047,6 +906,98 @@ BoussinesqModel<dim>::assemble_temperature_rhs(const double time_index)
 }
 
 
+template <int dim>
+double
+BoussinesqModel<dim>::get_maximal_velocity() const
+{
+  const QIterated<dim> quadrature_formula(QTrapez<1>(),
+                                          parameters.nse_velocity_degree);
+  const unsigned int   n_q_points = quadrature_formula.size();
+
+  FEValues<dim> fe_values(mapping, nse_fe, quadrature_formula, update_values);
+  std::vector<Tensor<1, dim>> velocity_values(n_q_points);
+
+  const FEValuesExtractors::Vector velocities(0);
+  double                           max_local_velocity = 0;
+
+  for (const auto &cell : nse_dof_handler.active_cell_iterators())
+    if (cell->is_locally_owned())
+      {
+        fe_values.reinit(cell);
+        fe_values[velocities].get_function_values(nse_solution,
+                                                  velocity_values);
+        for (unsigned int q = 0; q < n_q_points; ++q)
+          {
+            max_local_velocity =
+              std::max(max_local_velocity, velocity_values[q].norm());
+          }
+      }
+
+  return Utilities::MPI::max(max_local_velocity, this->mpi_communicator);
+}
+
+
+template <int dim>
+double
+BoussinesqModel<dim>::get_cfl_number() const
+{
+  const QIterated<dim> quadrature_formula(QTrapez<1>(),
+                                          parameters.nse_velocity_degree);
+  const unsigned int   n_q_points = quadrature_formula.size();
+
+  FEValues<dim> fe_values(mapping, nse_fe, quadrature_formula, update_values);
+  std::vector<Tensor<1, dim>> velocity_values(n_q_points);
+
+  const FEValuesExtractors::Vector velocities(0);
+  double                           max_local_cfl = 0;
+
+  for (const auto &cell : nse_dof_handler.active_cell_iterators())
+    if (cell->is_locally_owned())
+      {
+        fe_values.reinit(cell);
+        fe_values[velocities].get_function_values(nse_solution,
+                                                  velocity_values);
+        double max_local_velocity = 1e-10;
+        for (unsigned int q = 0; q < n_q_points; ++q)
+          {
+            max_local_velocity =
+              std::max(max_local_velocity, velocity_values[q].norm());
+          }
+        max_local_cfl =
+          std::max(max_local_cfl, max_local_velocity / cell->diameter());
+      }
+
+  return Utilities::MPI::max(max_local_cfl, this->mpi_communicator);
+}
+
+
+template <int dim>
+void
+BoussinesqModel<dim>::recompute_time_step()
+{
+  const double scaling = (dim == 3 ? 0.25 : 1.0);
+  /*
+   * Since we have the same geometry as in Deal.ii's mantle convection code
+   * (step-32) we can determine the new step similarly.
+   */
+  parameters.time_step = (scaling / (2.1 * dim * std::sqrt(1. * dim)) /
+                          (parameters.temperature_degree * get_cfl_number()));
+
+  const double maximal_velocity = get_maximal_velocity();
+
+  this->pcout << "   Max velocity (dimensionsless): " << maximal_velocity
+              << std::endl;
+  this->pcout << "   Max velocity (with dimensions): "
+              << maximal_velocity * parameters.reference_quantities.velocity
+              << " m/s" << std::endl;
+
+  this->pcout << "   New Time step (dimensionsless): " << parameters.time_step
+              << std::endl;
+  this->pcout << "   New Time step (with dimensions): "
+              << parameters.time_step * parameters.reference_quantities.time
+              << " s" << std::endl;
+}
+
 /////////////////////////////////////////////////////////////
 // solve
 /////////////////////////////////////////////////////////////
@@ -1055,272 +1006,287 @@ template <int dim>
 void
 BoussinesqModel<dim>::solve()
 {
-  if (parameters.use_direct_solver)
+  if ((timestep_number == 0) ||
+      ((timestep_number > 0) &&
+       (timestep_number % parameters.NSE_solver_interval == 0)))
     {
-      TimerOutput::Scope t(this->computing_timer, " direct solver (MUMPS)");
-
-      throw std::runtime_error(
-        "Solver not implemented: MUMPS does not work on "
-        "TrilinosWrappers::MPI::BlockSparseMatrix classes.");
-    }
-  else
-    {
-      if (!parameters.use_schur_complement_solver)
+      if (parameters.use_direct_solver)
         {
-          TimerOutput::Scope timer_section(this->computing_timer,
-                                           "   Solve Stokes system");
-          this->pcout
-            << "   Solving Navier-Stokes system for one timestep with (block preconditioned solver)... "
-            << std::flush;
+          TimerOutput::Scope t(this->computing_timer, " direct solver (MUMPS)");
 
-          TrilinosWrappers::MPI::BlockVector distributed_nse_solution(nse_rhs);
-          distributed_nse_solution = nse_solution;
-
-          const unsigned int
-            start = (distributed_nse_solution.block(0).size() +
-                     distributed_nse_solution.block(1).local_range().first),
-            end   = (distributed_nse_solution.block(0).size() +
-                   distributed_nse_solution.block(1).local_range().second);
-
-          for (unsigned int i = start; i < end; ++i)
-            if (nse_constraints.is_constrained(i))
-              distributed_nse_solution(i) = 0;
-
-          PrimitiveVectorMemory<TrilinosWrappers::MPI::BlockVector> mem;
-          unsigned int  n_iterations     = 0;
-          const double  solver_tolerance = 1e-8 * nse_rhs.l2_norm();
-          SolverControl solver_control(30, solver_tolerance);
-
-          /*
-           * We have only the actual pressure but need
-           * to solve for a scaled pressure to keep the
-           * system symmetric. Hence for the initial guess
-           * we need to transform to the rescaled version.
-           */
-          distributed_nse_solution.block(1) *= time_step;
-
-          try
-            {
-              const LinearAlgebra::BlockSchurPreconditioner<
-                TrilinosWrappers::PreconditionAMG,
-                TrilinosWrappers::PreconditionJacobi>
-                preconditioner(nse_matrix,
-                               nse_preconditioner_matrix,
-                               *Mp_preconditioner,
-                               *Amg_preconditioner,
-                               false);
-
-              SolverFGMRES<TrilinosWrappers::MPI::BlockVector> solver(
-                solver_control,
-                mem,
-                SolverFGMRES<
-                  TrilinosWrappers::MPI::BlockVector>::AdditionalData(30));
-
-              solver.solve(nse_matrix,
-                           distributed_nse_solution,
-                           nse_rhs,
-                           preconditioner);
-
-              n_iterations = solver_control.last_step();
-            }
-          catch (SolverControl::NoConvergence &)
-            {
-              const LinearAlgebra::BlockSchurPreconditioner<
-                TrilinosWrappers::PreconditionAMG,
-                TrilinosWrappers::PreconditionJacobi>
-                preconditioner(nse_matrix,
-                               nse_preconditioner_matrix,
-                               *Mp_preconditioner,
-                               *Amg_preconditioner,
-                               true);
-
-              SolverControl solver_control_refined(nse_matrix.m(),
-                                                   solver_tolerance);
-
-              SolverFGMRES<TrilinosWrappers::MPI::BlockVector> solver(
-                solver_control_refined,
-                mem,
-                SolverFGMRES<
-                  TrilinosWrappers::MPI::BlockVector>::AdditionalData(50));
-
-              solver.solve(nse_matrix,
-                           distributed_nse_solution,
-                           nse_rhs,
-                           preconditioner);
-
-              n_iterations = (solver_control.last_step() +
-                              solver_control_refined.last_step());
-            }
-          nse_constraints.distribute(distributed_nse_solution);
-
-          /*
-           * We solved only for a scaled pressure to
-           * keep the system symmetric. So retransform.
-           */
-          distributed_nse_solution.block(1) /= time_step;
-
-          nse_solution = distributed_nse_solution;
-
-          this->pcout << n_iterations << " iterations." << std::endl;
+          throw std::runtime_error(
+            "Solver not implemented: MUMPS does not work on "
+            "TrilinosWrappers::MPI::BlockSparseMatrix classes.");
         }
-      else // Schur complement solver
+      else
         {
-          TimerOutput::Scope timer_section(this->computing_timer,
-                                           "   Solve NSE system");
-          this->pcout
-            << "   Solving Navier-Stokes system for one timestep with (preconditioned Schur complement solver)... "
-            << std::endl;
+          if (!parameters.use_schur_complement_solver)
+            {
+              TimerOutput::Scope timer_section(this->computing_timer,
+                                               "   Solve Stokes system");
+              this->pcout
+                << "   Solving Navier-Stokes system for one timestep with (block preconditioned solver)... "
+                << std::flush;
 
-          /*
-           * Initialize the inner preconditioner.
-           */
-          inner_schur_preconditioner = std::make_shared<
-            typename LinearAlgebra::InnerSchurPreconditioner::type>();
+              TrilinosWrappers::MPI::BlockVector distributed_nse_solution(
+                nse_rhs);
+              distributed_nse_solution = nse_solution;
 
-          // Fill preconditioner with life
-          inner_schur_preconditioner->initialize(nse_matrix.block(0, 0), data);
+              const unsigned int
+                start = (distributed_nse_solution.block(0).size() +
+                         distributed_nse_solution.block(1).local_range().first),
+                end   = (distributed_nse_solution.block(0).size() +
+                       distributed_nse_solution.block(1).local_range().second);
 
-          const LinearAlgebra::InverseMatrix<
-            LA::SparseMatrix,
-            typename LinearAlgebra::InnerSchurPreconditioner::type>
-            block_inverse(nse_matrix.block(0, 0), *inner_schur_preconditioner);
+              for (unsigned int i = start; i < end; ++i)
+                if (nse_constraints.is_constrained(i))
+                  distributed_nse_solution(i) = 0;
 
-          TrilinosWrappers::MPI::BlockVector distributed_nse_solution(nse_rhs);
-          distributed_nse_solution = nse_solution;
+              PrimitiveVectorMemory<TrilinosWrappers::MPI::BlockVector> mem;
+              unsigned int  n_iterations     = 0;
+              const double  solver_tolerance = 1e-8 * nse_rhs.l2_norm();
+              SolverControl solver_control(30, solver_tolerance);
 
-          const unsigned int
-            start = (distributed_nse_solution.block(0).size() +
-                     distributed_nse_solution.block(1).local_range().first),
-            end   = (distributed_nse_solution.block(0).size() +
-                   distributed_nse_solution.block(1).local_range().second);
+              /*
+               * We have only the actual pressure but need
+               * to solve for a scaled pressure to keep the
+               * system symmetric. Hence for the initial guess
+               * we need to transform to the rescaled version.
+               */
+              distributed_nse_solution.block(1) *= parameters.time_step;
 
-          for (unsigned int i = start; i < end; ++i)
-            if (nse_constraints.is_constrained(i))
-              distributed_nse_solution(i) = 0;
+              try
+                {
+                  const LinearAlgebra::BlockSchurPreconditioner<
+                    TrilinosWrappers::PreconditionAMG,
+                    TrilinosWrappers::PreconditionJacobi>
+                    preconditioner(nse_matrix,
+                                   nse_preconditioner_matrix,
+                                   *Mp_preconditioner,
+                                   *Amg_preconditioner,
+                                   false);
 
-          // tmp of size block(0)
-          LA::MPI::Vector tmp(nse_partitioning[0], this->mpi_communicator);
+                  SolverFGMRES<TrilinosWrappers::MPI::BlockVector> solver(
+                    solver_control,
+                    mem,
+                    SolverFGMRES<
+                      TrilinosWrappers::MPI::BlockVector>::AdditionalData(30));
 
-          // Set up Schur complement
-          LinearAlgebra::SchurComplement<
-            LA::BlockSparseMatrix,
-            LA::MPI::Vector,
-            typename LinearAlgebra::InnerSchurPreconditioner::type>
-            schur_complement(nse_matrix,
-                             block_inverse,
-                             nse_partitioning,
-                             this->mpi_communicator);
+                  solver.solve(nse_matrix,
+                               distributed_nse_solution,
+                               nse_rhs,
+                               preconditioner);
 
-          // Compute schur_rhs = -g + C*A^{-1}*f
-          LA::MPI::Vector schur_rhs(nse_partitioning[1],
-                                    this->mpi_communicator);
+                  n_iterations = solver_control.last_step();
+                }
+              catch (SolverControl::NoConvergence &)
+                {
+                  const LinearAlgebra::BlockSchurPreconditioner<
+                    TrilinosWrappers::PreconditionAMG,
+                    TrilinosWrappers::PreconditionJacobi>
+                    preconditioner(nse_matrix,
+                                   nse_preconditioner_matrix,
+                                   *Mp_preconditioner,
+                                   *Amg_preconditioner,
+                                   true);
 
-          this->pcout
-            << std::endl
-            << "      Apply inverse of block (0,0) for Schur complement solver RHS..."
-            << std::endl;
+                  SolverControl solver_control_refined(nse_matrix.m(),
+                                                       solver_tolerance);
 
-          block_inverse.vmult(tmp, nse_rhs.block(0));
-          nse_matrix.block(1, 0).vmult(schur_rhs, tmp);
-          schur_rhs -= nse_rhs.block(1);
+                  SolverFGMRES<TrilinosWrappers::MPI::BlockVector> solver(
+                    solver_control_refined,
+                    mem,
+                    SolverFGMRES<
+                      TrilinosWrappers::MPI::BlockVector>::AdditionalData(50));
 
-          this->pcout << "      Schur complement solver RHS computation done..."
-                      << std::endl
-                      << std::endl;
+                  solver.solve(nse_matrix,
+                               distributed_nse_solution,
+                               nse_rhs,
+                               preconditioner);
 
-          {
-            TimerOutput::Scope t(
-              this->computing_timer,
-              "      Solve NSE system - Schur complement solver (for pressure)");
+                  n_iterations = (solver_control.last_step() +
+                                  solver_control_refined.last_step());
+                }
+              nse_constraints.distribute(distributed_nse_solution);
 
-            this->pcout << "      Apply Schur complement solver..."
-                        << std::endl;
+              /*
+               * We solved only for a scaled pressure to
+               * keep the system symmetric. So retransform.
+               */
+              distributed_nse_solution.block(1) /= parameters.time_step;
 
-            // Set Solver parameters for solving for u
-            SolverControl                solver_control(nse_matrix.m(),
-                                         1e-6 * schur_rhs.l2_norm());
-            SolverGMRES<LA::MPI::Vector> schur_solver(solver_control);
+              nse_solution = distributed_nse_solution;
 
-            /*
-             * Precondition the Schur complement with
-             * the approximate inverse of an approximate
-             * Schur complement.
-             */
-            LinearAlgebra::ApproximateSchurComplement<LA::BlockSparseMatrix,
-                                                      LA::MPI::Vector,
-                                                      LA::PreconditionILU>
-              approx_schur(nse_matrix,
-                           nse_partitioning,
-                           this->mpi_communicator);
+              this->pcout << n_iterations << " iterations." << std::endl;
+            }
+          else // Schur complement solver
+            {
+              TimerOutput::Scope timer_section(this->computing_timer,
+                                               "   Solve NSE system");
+              this->pcout
+                << "   Solving Navier-Stokes system for one timestep with (preconditioned Schur complement solver)... "
+                << std::endl;
 
-            using PreconType = LA::PreconditionIdentity;
-            PreconType precondition_identity;
-            LinearAlgebra::ApproximateInverseMatrix<
-              LinearAlgebra::ApproximateSchurComplement<LA::BlockSparseMatrix,
-                                                        LA::MPI::Vector,
-                                                        LA::PreconditionILU>,
-              PreconType>
-              preconditioner_for_schur_solver(approx_schur,
-                                              precondition_identity,
+              /*
+               * Initialize the inner preconditioner.
+               */
+              inner_schur_preconditioner = std::make_shared<
+                typename LinearAlgebra::InnerSchurPreconditioner::type>();
+
+              // Fill preconditioner with life
+              inner_schur_preconditioner->initialize(nse_matrix.block(0, 0),
+                                                     data);
+
+              const LinearAlgebra::InverseMatrix<
+                LA::SparseMatrix,
+                typename LinearAlgebra::InnerSchurPreconditioner::type>
+                block_inverse(nse_matrix.block(0, 0),
+                              *inner_schur_preconditioner);
+
+              TrilinosWrappers::MPI::BlockVector distributed_nse_solution(
+                nse_rhs);
+              distributed_nse_solution = nse_solution;
+
+              const unsigned int
+                start = (distributed_nse_solution.block(0).size() +
+                         distributed_nse_solution.block(1).local_range().first),
+                end   = (distributed_nse_solution.block(0).size() +
+                       distributed_nse_solution.block(1).local_range().second);
+
+              for (unsigned int i = start; i < end; ++i)
+                if (nse_constraints.is_constrained(i))
+                  distributed_nse_solution(i) = 0;
+
+              // tmp of size block(0)
+              LA::MPI::Vector tmp(nse_partitioning[0], this->mpi_communicator);
+
+              // Set up Schur complement
+              LinearAlgebra::SchurComplement<
+                LA::BlockSparseMatrix,
+                LA::MPI::Vector,
+                typename LinearAlgebra::InnerSchurPreconditioner::type>
+                schur_complement(nse_matrix,
+                                 block_inverse,
+                                 nse_partitioning,
+                                 this->mpi_communicator);
+
+              // Compute schur_rhs = -g + C*A^{-1}*f
+              LA::MPI::Vector schur_rhs(nse_partitioning[1],
+                                        this->mpi_communicator);
+
+              this->pcout
+                << std::endl
+                << "      Apply inverse of block (0,0) for Schur complement solver RHS..."
+                << std::endl;
+
+              block_inverse.vmult(tmp, nse_rhs.block(0));
+              nse_matrix.block(1, 0).vmult(schur_rhs, tmp);
+              schur_rhs -= nse_rhs.block(1);
+
+              this->pcout
+                << "      Schur complement solver RHS computation done..."
+                << std::endl
+                << std::endl;
+
+              {
+                TimerOutput::Scope t(
+                  this->computing_timer,
+                  "      Solve NSE system - Schur complement solver (for pressure)");
+
+                this->pcout << "      Apply Schur complement solver..."
+                            << std::endl;
+
+                // Set Solver parameters for solving for u
+                SolverControl                solver_control(nse_matrix.m(),
+                                             1e-6 * schur_rhs.l2_norm());
+                SolverGMRES<LA::MPI::Vector> schur_solver(solver_control);
+
+                /*
+                 * Precondition the Schur complement with
+                 * the approximate inverse of an approximate
+                 * Schur complement.
+                 */
+                LinearAlgebra::ApproximateSchurComplement<LA::BlockSparseMatrix,
+                                                          LA::MPI::Vector,
+                                                          LA::PreconditionILU>
+                  approx_schur(nse_matrix,
+                               nse_partitioning,
+                               this->mpi_communicator);
+
+                using PreconType = LA::PreconditionIdentity;
+                PreconType precondition_identity;
+                LinearAlgebra::ApproximateInverseMatrix<
+                  LinearAlgebra::ApproximateSchurComplement<
+                    LA::BlockSparseMatrix,
+                    LA::MPI::Vector,
+                    LA::PreconditionILU>,
+                  PreconType>
+                  preconditioner_for_schur_solver(approx_schur,
+                                                  precondition_identity,
 #ifdef DEBUG
-                                              /* n_iter */ 2500);
+                                                  /* n_iter */ 2500);
 #else
-                                              /* n_iter */ 40);
+                                                  /* n_iter */ 40);
 #endif
 
-            schur_solver.solve(
-              schur_complement,
-              distributed_nse_solution.block(1),
-              schur_rhs,
-              //                               						   precondition_identity);
-              preconditioner_for_schur_solver);
+                schur_solver.solve(
+                  schur_complement,
+                  distributed_nse_solution.block(1),
+                  schur_rhs,
+                  //                               						   precondition_identity);
+                  preconditioner_for_schur_solver);
 
-            this->pcout
-              << "      Iterative Schur complement solver converged in "
-              << solver_control.last_step() << " iterations." << std::endl
-              << std::endl;
+                this->pcout
+                  << "      Iterative Schur complement solver converged in "
+                  << solver_control.last_step() << " iterations." << std::endl
+                  << std::endl;
 
-            nse_constraints.distribute(distributed_nse_solution);
-          } // solve for pressure
+                nse_constraints.distribute(distributed_nse_solution);
+              } // solve for pressure
 
-          {
-            TimerOutput::Scope t(
-              this->computing_timer,
-              "      Solve NSE system - outer CG solver (for u)");
+              {
+                TimerOutput::Scope t(
+                  this->computing_timer,
+                  "      Solve NSE system - outer CG solver (for u)");
 
-            this->pcout << "      Apply outer solver..." << std::endl;
+                this->pcout << "      Apply outer solver..." << std::endl;
 
-            //	SolverControl                    outer_solver_control;
-            //	PETScWrappers::SparseDirectMUMPS
-            // outer_solver(outer_solver_control,
-            // this->mpi_communicator); 	outer_solver.set_symmetric_mode(true);
+                //	SolverControl                    outer_solver_control;
+                //	PETScWrappers::SparseDirectMUMPS
+                // outer_solver(outer_solver_control,
+                // this->mpi_communicator);
+                // outer_solver.set_symmetric_mode(true);
 
-            // use computed u to solve for sigma
-            nse_matrix.block(0, 1).vmult(tmp,
-                                         distributed_nse_solution.block(1));
-            tmp *= -1;
-            tmp += nse_rhs.block(0);
+                // use computed u to solve for sigma
+                nse_matrix.block(0, 1).vmult(tmp,
+                                             distributed_nse_solution.block(1));
+                tmp *= -1;
+                tmp += nse_rhs.block(0);
 
-            // Solve for velocity
-            block_inverse.vmult(distributed_nse_solution.block(0), tmp);
+                // Solve for velocity
+                block_inverse.vmult(distributed_nse_solution.block(0), tmp);
 
-            this->pcout << "      Outer solver completed." << std::endl
-                        << std::endl;
+                this->pcout << "      Outer solver completed." << std::endl
+                            << std::endl;
 
-            nse_constraints.distribute(distributed_nse_solution);
+                nse_constraints.distribute(distributed_nse_solution);
 
-            /*
-             * We solved only for a scaled pressure to
-             * keep the system symmetric. So retransform.
-             */
-            distributed_nse_solution.block(1) /= time_step;
+                /*
+                 * We solved only for a scaled pressure to
+                 * keep the system symmetric. So retransform.
+                 */
+                distributed_nse_solution.block(1) /= parameters.time_step;
 
-            nse_solution = distributed_nse_solution;
+                nse_solution = distributed_nse_solution;
 
-          } // solve for velocity
-        }   // Schur solver
-    }       // if-else (direct-iterative)
+              } // solve for velocity
+            }   // Schur solver
+        }       // if-else (direct-iterative)
+    }           // solver time intervall constraint
 
+  /*
+   * Temperature solver
+   */
   {
     TimerOutput::Scope timer_section(this->computing_timer,
                                      "   Solve temperature system");
@@ -1618,26 +1584,24 @@ BoussinesqModel<dim>::print_paramter_info() const
               << parameters.reference_quantities.velocity << std::endl
               << "Reference time                       :   "
               << parameters.reference_quantities.time << std::endl
-              << "Atmosphere temperature (bottom)      :   "
-              << parameters.reference_quantities.temperature_bottom << std::endl
-              << "Atmosphere temperature (top)         :   "
-              << parameters.reference_quantities.temperature_top << std::endl
+              << "Reference atmosphere temperature     :   "
+              << parameters.reference_quantities.temperature_ref << std::endl
               << "Atmosphere temperature change        :   "
               << parameters.reference_quantities.temperature_change << std::endl
               << std::endl
-              << "Reynolds number (NSE)                :   "
+              << "Reynolds number                      :   "
               << CoreModelData::get_reynolds_number(
                    parameters.reference_quantities.velocity,
                    parameters.reference_quantities.length,
                    parameters.physical_constants.kinematic_viscosity)
               << std::endl
-              << "Peclet number (NSE)                  :   "
+              << "Peclet number                        :   "
               << CoreModelData::get_peclet_number(
                    parameters.reference_quantities.velocity,
                    parameters.reference_quantities.length,
                    parameters.physical_constants.thermal_diffusivity)
               << std::endl
-              << "Grashoff number (NSE)                :   "
+              << "Grashoff number                      :   "
               << CoreModelData::get_grashoff_number(
                    dim,
                    parameters.physical_constants.gravity_constant,
@@ -1646,12 +1610,12 @@ BoussinesqModel<dim>::print_paramter_info() const
                    parameters.reference_quantities.length,
                    parameters.physical_constants.kinematic_viscosity)
               << std::endl
-              << "Prandtl number (NSE)                 :   "
+              << "Prandtl number                       :   "
               << CoreModelData::get_prandtl_number(
                    parameters.physical_constants.kinematic_viscosity,
                    parameters.physical_constants.thermal_diffusivity)
               << std::endl
-              << "Rayleigh number (NSE)                :   "
+              << "Rayleigh number                      :   "
               << CoreModelData::get_rayleigh_number(
                    dim,
                    parameters.physical_constants.gravity_constant,
@@ -1716,10 +1680,23 @@ BoussinesqModel<dim>::run()
                   << "Time step " << timestep_number << ":  t=" << time_index
                   << std::endl;
 
-      assemble_nse_system(time_index);
+      if (timestep_number == 0)
+        {
+          assemble_nse_system(time_index);
 
-      if (!parameters.use_schur_complement_solver)
-        build_nse_preconditioner(time_index);
+          if (!parameters.use_schur_complement_solver)
+            build_nse_preconditioner(time_index);
+        }
+      else if ((timestep_number > 0) &&
+               (timestep_number % parameters.NSE_solver_interval == 0))
+        {
+          recompute_time_step();
+
+          assemble_nse_system(time_index);
+
+          if (!parameters.use_schur_complement_solver)
+            build_nse_preconditioner(time_index);
+        }
 
       assemble_temperature_matrix(time_index);
       assemble_temperature_rhs(time_index);
@@ -1728,7 +1705,16 @@ BoussinesqModel<dim>::run()
 
       output_results();
 
-      time_index += time_step;
+      /*
+       * Print summary after a NSE system has been solved.
+       */
+      if ((timestep_number > 0) &&
+          (timestep_number % parameters.NSE_solver_interval == 0))
+        {
+          this->computing_timer.print_summary();
+        }
+
+      time_index += parameters.time_step;
       ++timestep_number;
 
       old_nse_solution         = nse_solution;

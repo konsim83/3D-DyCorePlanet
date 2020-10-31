@@ -72,6 +72,7 @@
 #include <linear_algebra/preconditioner.h>
 #include <linear_algebra/schur_complement.hpp>
 #include <model_data/boussinesq_model_data.h>
+#include <model_data/boussinesq_model_parameters.h>
 #include <model_data/core_model_data.h>
 
 
@@ -110,9 +111,7 @@ template <int dim>
 class BoussinesqModel : protected PlanetGeometry<dim>
 {
 public:
-  struct Parameters;
-
-  BoussinesqModel(Parameters &parameters);
+  BoussinesqModel(CoreModelData::Parameters &parameters);
   ~BoussinesqModel();
 
   void
@@ -174,6 +173,15 @@ private:
   void
   assemble_temperature_rhs(const double time_index);
 
+  double
+  get_maximal_velocity() const;
+
+  double
+  get_cfl_number() const;
+
+  void
+  recompute_time_step();
+
   void
   solve();
 
@@ -183,44 +191,10 @@ private:
   void
   print_paramter_info() const;
 
-public:
-  /*!
-   * @class Paramters
-   *
-   * Class holding parameters for a bouyancy Boussinesq model.
-   */
-  struct Parameters
-  {
-    Parameters(const std::string &parameter_filename);
-
-    void
-    declare_parameters(ParameterHandler &prm);
-
-    void
-    parse_parameters(ParameterHandler &prm);
-
-    CoreModelData::ReferenceQuantities reference_quantities;
-    CoreModelData::PhysicalConstants   physical_constants;
-
-    double       final_time;
-    unsigned int initial_global_refinement;
-
-    double       nse_theta;
-    unsigned int nse_velocity_degree;
-    bool         use_locally_conservative_discretization;
-
-    bool use_schur_complement_solver;
-    bool use_direct_solver;
-
-    double       temperature_theta;
-    unsigned int temperature_degree;
-  };
-
-private:
   /*!
    * Parameter class.
    */
-  Parameters &parameters;
+  CoreModelData::Parameters &parameters;
 
   const MappingQ<dim> mapping;
 
@@ -255,7 +229,6 @@ private:
   LA::MPI::Vector temperature_solution;
   LA::MPI::Vector old_temperature_solution;
 
-  double       time_step;
   unsigned int timestep_number;
 
   std::shared_ptr<LA::PreconditionAMG>    Amg_preconditioner;

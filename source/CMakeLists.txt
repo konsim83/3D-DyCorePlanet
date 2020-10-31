@@ -18,6 +18,7 @@ include_directories(${AquaPlanet_INCLUDE_DIR})
 set(AquaPlanet_Boussinesq_TARGET_LIB_SRC
 	model_data/reference_quantities.cc
 	model_data/physical_constants.cc
+	model_data/boussinesq_model_parameters.cc
 	core/dycore_planet.inst.cc
 	model_data/core_model_data.cc
 	model_data/core_model_data.inst.cc	

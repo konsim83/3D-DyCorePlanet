@@ -6,8 +6,7 @@ namespace CoreModelData
 {
   template <int dim>
   Tensor<1, dim>
-  CoreModelData::gravity_vector(const Point<dim> &p,
-                                const double      gravity_constant)
+  gravity_vector(const Point<dim> &p, const double gravity_constant)
   {
     const double r = p.norm();
     return -gravity_constant * p / r;
@@ -16,7 +15,7 @@ namespace CoreModelData
 
   template <int dim>
   Tensor<1, dim>
-  CoreModelData::coriolis_vector(const Point<dim> & /*p*/, const double omega)
+  coriolis_vector(const Point<dim> & /*p*/, const double omega)
   {
     Tensor<1, dim> z;
 
