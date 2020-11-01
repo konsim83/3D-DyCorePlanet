@@ -12,6 +12,7 @@ CoreModelData::Parameters::Parameters(const std::string &parameter_filename)
   , initial_global_refinement(2)
   , nse_theta(0.5)
   , nse_velocity_degree(2)
+  , use_FEEC_solver(false)
   , use_locally_conservative_discretization(true)
   , use_schur_complement_solver(true)
   , use_direct_solver(false)
@@ -85,6 +86,12 @@ CoreModelData::Parameters::declare_parameters(ParameterHandler &prm)
                       "in the NSE system.");
 
     prm.declare_entry(
+      "use FEEC solver",
+      "false",
+      Patterns::Bool(),
+      "Replace standard H1-L2 elements with	pairings and solvers appropriate for H(curl)-H(div)-L2 elements.");
+
+    prm.declare_entry(
       "use locally conservative discretization",
       "true",
       Patterns::Bool(),
@@ -155,8 +162,12 @@ CoreModelData::Parameters::parse_parameters(ParameterHandler &prm)
 
     nse_theta           = prm.get_double("nse theta");
     nse_velocity_degree = prm.get_integer("nse velocity degree");
+
+    use_FEEC_solver = prm.get_bool("use FEEC solver");
+
     use_locally_conservative_discretization =
       prm.get_bool("use locally conservative discretization");
+
     use_schur_complement_solver = prm.get_bool("use schur complement solver");
     use_direct_solver           = prm.get_bool("use direct solver");
 

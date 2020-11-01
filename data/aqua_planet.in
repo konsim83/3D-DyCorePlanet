@@ -37,6 +37,13 @@ subsection Boussinesq Model
 
 	set nse theta = 0.5
 	set nse velocity degree = 2
+	
+	# Replace standard H1-L2 elements with
+	# pairings and solvers appropriate 
+	# for H(curl)-H(div)-L2 elements
+	set use FEEC solver = false
+	
+	# only valid for standard H1-L2 elements
 	set use locally conservative discretization = false
 	
 	set use schur complement solver = false

@@ -10,6 +10,7 @@
 #include <iostream>
 
 // AquaPlanet
+//#include <core/boussineq_model_FEEC.h>
 #include <core/boussinesq_model.h>
 
 
@@ -72,15 +73,33 @@ main(int argc, char *argv[])
 
       if (parameters_boussinesq.space_dimension == 2)
         {
-          DyCorePlanet::Standard::BoussinesqModel<2> aqua_planet_boussinesq(
-            parameters_boussinesq);
-          aqua_planet_boussinesq.run();
+          if (parameters_boussinesq.use_FEEC_solver)
+            {
+//              DyCorePlanet::ExtersiorCalculus::BoussinesqModel<2>
+//                aqua_planet_boussinesq(parameters_boussinesq);
+//              aqua_planet_boussinesq.run();
+            }
+          else
+            {
+              DyCorePlanet::Standard::BoussinesqModel<2> aqua_planet_boussinesq(
+                parameters_boussinesq);
+              aqua_planet_boussinesq.run();
+            }
         }
       else if (parameters_boussinesq.space_dimension == 3)
         {
-          DyCorePlanet::Standard::BoussinesqModel<3> aqua_planet_boussinesq(
-            parameters_boussinesq);
-          aqua_planet_boussinesq.run();
+          if (parameters_boussinesq.use_FEEC_solver)
+            {
+//              DyCorePlanet::ExtersiorCalculus::BoussinesqModel<3>
+//                aqua_planet_boussinesq(parameters_boussinesq);
+//              aqua_planet_boussinesq.run();
+            }
+          else
+            {
+              DyCorePlanet::Standard::BoussinesqModel<3> aqua_planet_boussinesq(
+                parameters_boussinesq);
+              aqua_planet_boussinesq.run();
+            }
         }
       else
         {

@@ -38,6 +38,9 @@ namespace CoreModelData
 
     double       nse_theta;
     unsigned int nse_velocity_degree;
+
+    bool use_FEEC_solver;
+
     bool         use_locally_conservative_discretization;
 
     bool use_schur_complement_solver;
