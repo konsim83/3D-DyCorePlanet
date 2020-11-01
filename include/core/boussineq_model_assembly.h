@@ -54,219 +54,220 @@
 
 DYCOREPLANET_OPEN_NAMESPACE
 
-
-namespace Assembly
+namespace Standard
 {
-  namespace Scratch
+  namespace Assembly
   {
-    ////////////////////////////////////
-    /// NSE preconditioner
-    ////////////////////////////////////
-
-    template <int dim>
-    struct NSEPreconditioner
+    namespace Scratch
     {
-      NSEPreconditioner(const double              time_step,
-                        const double              time_index,
-                        const FiniteElement<dim> &nse_fe,
-                        const Quadrature<dim> &   nse_quadrature,
-                        const Mapping<dim> &      mapping,
-                        const UpdateFlags         update_flags);
+      ////////////////////////////////////
+      /// NSE preconditioner
+      ////////////////////////////////////
 
-      NSEPreconditioner(const NSEPreconditioner<dim> &data);
+      template <int dim>
+      struct NSEPreconditioner
+      {
+        NSEPreconditioner(const double              time_step,
+                          const double              time_index,
+                          const FiniteElement<dim> &nse_fe,
+                          const Quadrature<dim> &   nse_quadrature,
+                          const Mapping<dim> &      mapping,
+                          const UpdateFlags         update_flags);
 
-      FEValues<dim> nse_fe_values;
+        NSEPreconditioner(const NSEPreconditioner<dim> &data);
 
-      std::vector<Tensor<1, dim>> phi_u;
-      std::vector<Tensor<2, dim>> grad_phi_u;
-      std::vector<double>         phi_p;
+        FEValues<dim> nse_fe_values;
 
-      const double time_step;
-      const double time_index;
-    };
+        std::vector<Tensor<1, dim>> phi_u;
+        std::vector<Tensor<2, dim>> grad_phi_u;
+        std::vector<double>         phi_p;
+
+        const double time_step;
+        const double time_index;
+      };
 
 
-    ////////////////////////////////////
-    /// NSE system
-    ////////////////////////////////////
+      ////////////////////////////////////
+      /// NSE system
+      ////////////////////////////////////
 
-    template <int dim>
-    struct NSESystem : public NSEPreconditioner<dim>
+      template <int dim>
+      struct NSESystem : public NSEPreconditioner<dim>
+      {
+        NSESystem(const double              time_step,
+                  const double              time_index,
+                  const FiniteElement<dim> &nse_fe,
+                  const Mapping<dim> &      mapping,
+                  const Quadrature<dim> &   nse_quadrature,
+                  const UpdateFlags         nse_update_flags,
+                  const FiniteElement<dim> &temperature_fe,
+                  const UpdateFlags         temperature_update_flags);
+
+        NSESystem(const NSESystem<dim> &data);
+
+        FEValues<dim> temperature_fe_values;
+        FEValues<dim> nse_fe_values;
+
+        std::vector<Tensor<1, dim>>          phi_u;
+        std::vector<SymmetricTensor<2, dim>> grads_phi_u;
+        std::vector<double>                  div_phi_u;
+
+        std::vector<double>         old_temperature_values;
+        std::vector<Tensor<1, dim>> old_velocity_values;
+        std::vector<Tensor<2, dim>> old_velocity_grads;
+      };
+
+
+      ////////////////////////////////////
+      /// Temperature matrix
+      ////////////////////////////////////
+
+      template <int dim>
+      struct TemperatureMatrix
+      {
+        TemperatureMatrix(const double              time_step,
+                          const double              time_index,
+                          const FiniteElement<dim> &temperature_fe,
+                          const Mapping<dim> &      mapping,
+                          const Quadrature<dim> &   temperature_quadrature);
+
+        TemperatureMatrix(const TemperatureMatrix<dim> &data);
+
+        FEValues<dim> temperature_fe_values;
+
+        std::vector<double>         phi_T;
+        std::vector<Tensor<1, dim>> grad_phi_T;
+
+        const double time_step;
+        const double time_index;
+      };
+
+
+      ////////////////////////////////////
+      /// Temperture RHS
+      ////////////////////////////////////
+
+      template <int dim>
+      struct TemperatureRHS
+      {
+        TemperatureRHS(const double              time_step,
+                       const double              time_index,
+                       const FiniteElement<dim> &temperature_fe,
+                       const FiniteElement<dim> &nse_fe,
+                       const Mapping<dim> &      mapping,
+                       const Quadrature<dim> &   quadrature);
+
+        TemperatureRHS(const TemperatureRHS<dim> &data);
+
+        FEValues<dim> temperature_fe_values;
+        FEValues<dim> nse_fe_values;
+
+        std::vector<double>         phi_T;
+        std::vector<Tensor<1, dim>> grad_phi_T;
+
+        std::vector<Tensor<1, dim>> old_velocity_values;
+        std::vector<double>         old_temperature_values;
+        std::vector<Tensor<1, dim>> old_temperature_grads;
+
+        const double time_step;
+        const double time_index;
+      };
+
+    } // namespace Scratch
+
+
+
+    namespace CopyData
     {
-      NSESystem(const double              time_step,
-                const double              time_index,
-                const FiniteElement<dim> &nse_fe,
-                const Mapping<dim> &      mapping,
-                const Quadrature<dim> &   nse_quadrature,
-                const UpdateFlags         nse_update_flags,
-                const FiniteElement<dim> &temperature_fe,
-                const UpdateFlags         temperature_update_flags);
+      ////////////////////////////////////
+      /// NSE preconditioner copy
+      ////////////////////////////////////
 
-      NSESystem(const NSESystem<dim> &data);
+      template <int dim>
+      struct NSEPreconditioner
+      {
+        NSEPreconditioner(const FiniteElement<dim> &nse_fe);
+        NSEPreconditioner(const NSEPreconditioner<dim> &data);
 
-      FEValues<dim> temperature_fe_values;
-      FEValues<dim> nse_fe_values;
+        NSEPreconditioner<dim> &
+        operator=(const NSEPreconditioner<dim> &) = default;
 
-      std::vector<Tensor<1, dim>>          phi_u;
-      std::vector<SymmetricTensor<2, dim>> grads_phi_u;
-      std::vector<double>                  div_phi_u;
-
-      std::vector<double>         old_temperature_values;
-      std::vector<Tensor<1, dim>> old_velocity_values;
-      std::vector<Tensor<2, dim>> old_velocity_grads;
-    };
+        FullMatrix<double>                   local_matrix;
+        std::vector<types::global_dof_index> local_dof_indices;
+      };
 
 
-    ////////////////////////////////////
-    /// Temperature matrix
-    ////////////////////////////////////
+      ////////////////////////////////////
+      /// NSE system copy
+      ////////////////////////////////////
 
-    template <int dim>
-    struct TemperatureMatrix
-    {
-      TemperatureMatrix(const double              time_step,
-                        const double              time_index,
-                        const FiniteElement<dim> &temperature_fe,
-                        const Mapping<dim> &      mapping,
-                        const Quadrature<dim> &   temperature_quadrature);
+      template <int dim>
+      struct NSESystem : public NSEPreconditioner<dim>
+      {
+        NSESystem(const FiniteElement<dim> &nse_fe);
 
-      TemperatureMatrix(const TemperatureMatrix<dim> &data);
+        NSESystem(const NSESystem<dim> &data);
 
-      FEValues<dim> temperature_fe_values;
-
-      std::vector<double>         phi_T;
-      std::vector<Tensor<1, dim>> grad_phi_T;
-
-      const double time_step;
-      const double time_index;
-    };
+        Vector<double> local_rhs;
+      };
 
 
-    ////////////////////////////////////
-    /// Temperture RHS
-    ////////////////////////////////////
+      ////////////////////////////////////
+      /// Temperature system copy
+      ////////////////////////////////////
 
-    template <int dim>
-    struct TemperatureRHS
-    {
-      TemperatureRHS(const double              time_step,
-                     const double              time_index,
-                     const FiniteElement<dim> &temperature_fe,
-                     const FiniteElement<dim> &nse_fe,
-                     const Mapping<dim> &      mapping,
-                     const Quadrature<dim> &   quadrature);
+      template <int dim>
+      struct TemperatureMatrix
+      {
+        TemperatureMatrix(const FiniteElement<dim> &temperature_fe);
 
-      TemperatureRHS(const TemperatureRHS<dim> &data);
+        TemperatureMatrix(const TemperatureMatrix<dim> &data);
 
-      FEValues<dim> temperature_fe_values;
-      FEValues<dim> nse_fe_values;
+        FullMatrix<double> local_mass_matrix;
+        FullMatrix<double> local_advection_matrix;
+        FullMatrix<double> local_stiffness_matrix;
 
-      std::vector<double>         phi_T;
-      std::vector<Tensor<1, dim>> grad_phi_T;
-
-      std::vector<Tensor<1, dim>> old_velocity_values;
-      std::vector<double>         old_temperature_values;
-      std::vector<Tensor<1, dim>> old_temperature_grads;
-
-      const double time_step;
-      const double time_index;
-    };
-
-  } // namespace Scratch
+        std::vector<types::global_dof_index> local_dof_indices;
+      };
 
 
+      ////////////////////////////////////
+      /// Temperature RHS copy
+      ////////////////////////////////////
 
-  namespace CopyData
-  {
-    ////////////////////////////////////
-    /// NSE preconditioner copy
-    ////////////////////////////////////
+      template <int dim>
+      struct TemperatureRHS
+      {
+        TemperatureRHS(const FiniteElement<dim> &temperature_fe);
+        TemperatureRHS(const TemperatureRHS<dim> &data);
+        Vector<double>                       local_rhs;
+        std::vector<types::global_dof_index> local_dof_indices;
+        FullMatrix<double>                   matrix_for_bc;
+      };
 
-    template <int dim>
-    struct NSEPreconditioner
-    {
-      NSEPreconditioner(const FiniteElement<dim> &nse_fe);
-      NSEPreconditioner(const NSEPreconditioner<dim> &data);
-
-      NSEPreconditioner<dim> &
-      operator=(const NSEPreconditioner<dim> &) = default;
-
-      FullMatrix<double>                   local_matrix;
-      std::vector<types::global_dof_index> local_dof_indices;
-    };
-
-
-    ////////////////////////////////////
-    /// NSE system copy
-    ////////////////////////////////////
-
-    template <int dim>
-    struct NSESystem : public NSEPreconditioner<dim>
-    {
-      NSESystem(const FiniteElement<dim> &nse_fe);
-
-      NSESystem(const NSESystem<dim> &data);
-
-      Vector<double> local_rhs;
-    };
-
-
-    ////////////////////////////////////
-    /// Temperature system copy
-    ////////////////////////////////////
-
-    template <int dim>
-    struct TemperatureMatrix
-    {
-      TemperatureMatrix(const FiniteElement<dim> &temperature_fe);
-
-      TemperatureMatrix(const TemperatureMatrix<dim> &data);
-
-      FullMatrix<double> local_mass_matrix;
-      FullMatrix<double> local_advection_matrix;
-      FullMatrix<double> local_stiffness_matrix;
-
-      std::vector<types::global_dof_index> local_dof_indices;
-    };
-
-
-    ////////////////////////////////////
-    /// Temperature RHS copy
-    ////////////////////////////////////
-
-    template <int dim>
-    struct TemperatureRHS
-    {
-      TemperatureRHS(const FiniteElement<dim> &temperature_fe);
-      TemperatureRHS(const TemperatureRHS<dim> &data);
-      Vector<double>                       local_rhs;
-      std::vector<types::global_dof_index> local_dof_indices;
-      FullMatrix<double>                   matrix_for_bc;
-    };
-
-  } // namespace CopyData
-} // namespace Assembly
-
+    } // namespace CopyData
+  }   // namespace Assembly
+} // namespace Standard
 
 // Extern template instantiations
-extern template class Assembly::Scratch::NSEPreconditioner<2>;
-extern template class Assembly::Scratch::NSESystem<2>;
-extern template class Assembly::Scratch::TemperatureMatrix<2>;
-extern template class Assembly::Scratch::TemperatureRHS<2>;
+extern template class Standard::Assembly::Scratch::NSEPreconditioner<2>;
+extern template class Standard::Assembly::Scratch::NSESystem<2>;
+extern template class Standard::Assembly::Scratch::TemperatureMatrix<2>;
+extern template class Standard::Assembly::Scratch::TemperatureRHS<2>;
 
-extern template class Assembly::CopyData::NSEPreconditioner<2>;
-extern template class Assembly::CopyData::NSESystem<2>;
-extern template class Assembly::CopyData::TemperatureMatrix<2>;
-extern template class Assembly::CopyData::TemperatureRHS<2>;
+extern template class Standard::Assembly::CopyData::NSEPreconditioner<2>;
+extern template class Standard::Assembly::CopyData::NSESystem<2>;
+extern template class Standard::Assembly::CopyData::TemperatureMatrix<2>;
+extern template class Standard::Assembly::CopyData::TemperatureRHS<2>;
 
-extern template class Assembly::Scratch::NSEPreconditioner<3>;
-extern template class Assembly::Scratch::NSESystem<3>;
-extern template class Assembly::Scratch::TemperatureMatrix<3>;
-extern template class Assembly::Scratch::TemperatureRHS<3>;
+extern template class Standard::Assembly::Scratch::NSEPreconditioner<3>;
+extern template class Standard::Assembly::Scratch::NSESystem<3>;
+extern template class Standard::Assembly::Scratch::TemperatureMatrix<3>;
+extern template class Standard::Assembly::Scratch::TemperatureRHS<3>;
 
-extern template class Assembly::CopyData::NSEPreconditioner<3>;
-extern template class Assembly::CopyData::NSESystem<3>;
-extern template class Assembly::CopyData::TemperatureMatrix<3>;
-extern template class Assembly::CopyData::TemperatureRHS<3>;
+extern template class Standard::Assembly::CopyData::NSEPreconditioner<3>;
+extern template class Standard::Assembly::CopyData::NSESystem<3>;
+extern template class Standard::Assembly::CopyData::TemperatureMatrix<3>;
+extern template class Standard::Assembly::CopyData::TemperatureRHS<3>;
 
 DYCOREPLANET_CLOSE_NAMESPACE

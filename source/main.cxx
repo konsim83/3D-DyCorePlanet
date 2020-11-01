@@ -72,13 +72,13 @@ main(int argc, char *argv[])
 
       if (parameters_boussinesq.space_dimension == 2)
         {
-          DyCorePlanet::BoussinesqModel<2> aqua_planet_boussinesq(
+          DyCorePlanet::Standard::BoussinesqModel<2> aqua_planet_boussinesq(
             parameters_boussinesq);
           aqua_planet_boussinesq.run();
         }
       else if (parameters_boussinesq.space_dimension == 3)
         {
-          DyCorePlanet::BoussinesqModel<3> aqua_planet_boussinesq(
+          DyCorePlanet::Standard::BoussinesqModel<3> aqua_planet_boussinesq(
             parameters_boussinesq);
           aqua_planet_boussinesq.run();
         }

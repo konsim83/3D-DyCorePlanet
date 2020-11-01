@@ -5,7 +5,7 @@
 DYCOREPLANET_OPEN_NAMESPACE
 
 // Extern template instantiations
-template class BoussinesqModel<2>;
-template class BoussinesqModel<3>;
+template class Standard::BoussinesqModel<2>;
+template class Standard::BoussinesqModel<3>;
 
 DYCOREPLANET_CLOSE_NAMESPACE
