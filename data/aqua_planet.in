@@ -4,19 +4,7 @@ subsection Boussinesq Model
 		set initial global refinement = 4
 	end
 	
-	subsection Reference quantities
-		# Standard: 1.01325e+5 [Pa]
-		set pressure = 1.01325e+5
-		
-		# Standard: 7.272205e-5 [1/s]
-  		set omega = 7.272205e-5
-  		
-  		# Standard: 1.29 [kg / m^3]
-		set density = 1.29
-		
-		# Standard: 3.6e+3 [s]
-		set time = 3.6e+3
-		
+	subsection Reference quantities		
 		# Standard: 10 [m/s]
 		set velocity = 10
 		
@@ -63,6 +51,21 @@ end
 
 
 subsection Physical Constants
+
+	# Average atmosphere pressure
+	#
+	# Standard: 1.01325e+5 [Pa]
+	set average atm pressure = 1.01325e+5
+	
+	# Planetary angular velocity
+	#
+	# Standard: 7.272205e-5 [1/s]
+  	set omega = 7.272205e-5
+  		
+	# Air density
+	#
+	# Standard: 1.29 [kg / m^3]
+	set density = 1.29
 
 	# Universal gas constant.
 	#

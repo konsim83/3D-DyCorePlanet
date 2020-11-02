@@ -5,10 +5,7 @@ DYCOREPLANET_OPEN_NAMESPACE
 
 CoreModelData::ReferenceQuantities::ReferenceQuantities(
   const std::string &parameter_filename)
-  : pressure(1.01325e+5)
-  , omega(7.272205e-5)
-  , density(1.29)
-  , time(3.6e+3)
+  : time(0)
   , velocity(10)
   , length(1e+4)
   , temperature_ref(273.15)
@@ -44,26 +41,6 @@ CoreModelData::ReferenceQuantities::declare_parameters(ParameterHandler &prm)
   {
     prm.enter_subsection("Reference quantities");
     {
-      prm.declare_entry("omega",
-                        "7.272205e-5",
-                        Patterns::Double(0),
-                        "Reference angular velocity [rad/s].");
-
-      prm.declare_entry("pressure",
-                        "1.01325e+5",
-                        Patterns::Double(0),
-                        "Reference pressure.");
-
-      prm.declare_entry("density",
-                        "1.29",
-                        Patterns::Double(0),
-                        "Reference density.");
-
-      prm.declare_entry("time",
-                        "3.6e+3",
-                        Patterns::Double(0),
-                        "Reference time.");
-
       prm.declare_entry("velocity",
                         "10",
                         Patterns::Double(0),
@@ -98,10 +75,6 @@ CoreModelData::ReferenceQuantities::parse_parameters(ParameterHandler &prm)
   {
     prm.enter_subsection("Reference quantities");
     {
-      pressure           = prm.get_double("pressure");           /* Pa */
-      omega              = prm.get_double("omega");              /* 1/s */
-      density            = prm.get_double("density");            /* kg / m^3 */
-      time               = prm.get_double("time");               /* s */
       velocity           = prm.get_double("velocity");           /* m/s */
       length             = prm.get_double("length");             /* m */
       temperature_ref    = prm.get_double("temperature");        /* K */
@@ -110,6 +83,8 @@ CoreModelData::ReferenceQuantities::parse_parameters(ParameterHandler &prm)
     prm.leave_subsection();
   }
   prm.leave_subsection();
+
+  time = length / velocity; /* s */
 }
 
 DYCOREPLANET_CLOSE_NAMESPACE

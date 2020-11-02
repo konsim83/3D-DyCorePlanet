@@ -497,7 +497,7 @@ namespace Standard
       {
         const double old_temperature = scratch.old_temperature_values[q];
         const double density_scaling = CoreModelData::density_scaling(
-          parameters.reference_quantities.density,
+          parameters.physical_constants.density,
           old_temperature,
           parameters.reference_quantities.temperature_ref);
         const Tensor<1, dim> old_velocity = scratch.old_velocity_values[q];
@@ -518,9 +518,11 @@ namespace Standard
           }
 
         const Tensor<1, dim> coriolis =
+          parameters.reference_quantities.length *
           CoreModelData::coriolis_vector(scratch.nse_fe_values.quadrature_point(
                                            q),
-                                         parameters.reference_quantities.omega);
+                                         parameters.physical_constants.omega) /
+          parameters.reference_quantities.velocity;
 
         /*
          * Move everything to the LHS here.
@@ -540,9 +542,13 @@ namespace Standard
                ) *
               scratch.nse_fe_values.JxW(q);
 
-        const Tensor<1, dim> gravity = CoreModelData::gravity_vector(
-          scratch.nse_fe_values.quadrature_point(q),
-          parameters.physical_constants.gravity_constant);
+        const Tensor<1, dim> gravity =
+          (parameters.reference_quantities.length /
+           (parameters.reference_quantities.velocity *
+            parameters.reference_quantities.velocity)) *
+          CoreModelData::gravity_vector(
+            scratch.nse_fe_values.quadrature_point(q),
+            parameters.physical_constants.gravity_constant);
 
         /*
          * This is only the RHS
@@ -555,7 +561,7 @@ namespace Standard
              parameters.time_step * scratch.phi_u[i] *
                (old_velocity * old_velocity_grads) // advection at previous time
              - (dim == 2 ? -parameters.time_step * 2 *
-                             parameters.reference_quantities.omega *
+                             parameters.physical_constants.omega *
                              scratch.phi_u[i] * cross_product_2d(old_velocity) :
                            parameters.time_step * 2 * scratch.phi_u[i] *
                              cross_product_3d(coriolis,
@@ -815,6 +821,9 @@ namespace Standard
           }
 
         const double gamma =
+          (parameters.reference_quantities.length /
+           (parameters.reference_quantities.velocity *
+            parameters.reference_quantities.temperature_ref)) *
           0; // CoreModelData::Boussinesq::TemperatureRHS value at quad point
 
         for (unsigned int i = 0; i < dofs_per_cell; ++i)
@@ -982,11 +991,11 @@ namespace Standard
   void
   BoussinesqModel<dim>::recompute_time_step()
   {
-    const double scaling = (dim == 3 ? 0.25 : 1.0);
     /*
      * Since we have the same geometry as in Deal.ii's mantle convection code
      * (step-32) we can determine the new step similarly.
      */
+    const double scaling = (dim == 3 ? 0.25 : 1.0);
     parameters.time_step = (scaling / (2.1 * dim * std::sqrt(1. * dim)) /
                             (parameters.temperature_degree * get_cfl_number()));
 
@@ -1020,7 +1029,7 @@ namespace Standard
         TimerOutput::Scope timer_section(this->computing_timer,
                                          "   Solve Stokes system");
         this->pcout
-          << "   Solving Navier-Stokes system for one timestep with (block preconditioned solver)... "
+          << "   Solving Navier-Stokes system for one time step with (block preconditioned solver)... "
           << std::flush;
 
         TrilinosWrappers::MPI::BlockVector distributed_nse_solution(nse_rhs);
@@ -1127,7 +1136,7 @@ namespace Standard
         TimerOutput::Scope timer_section(this->computing_timer,
                                          "   Solve NSE system");
         this->pcout
-          << "   Solving Navier-Stokes system for one timestep with (preconditioned Schur complement solver)... "
+          << "   Solving Navier-Stokes system for one time step with (preconditioned Schur complement solver)... "
           << std::endl;
 
         /*
@@ -1572,7 +1581,7 @@ namespace Standard
                 << parameters.physical_constants.atm_height << std::endl
                 << std::endl
                 << "Reference pressure                   :   "
-                << parameters.reference_quantities.pressure << std::endl
+                << parameters.physical_constants.pressure << std::endl
                 << "Reference length                     :   "
                 << parameters.reference_quantities.length << std::endl
                 << "Reference velocity                   :   "

@@ -6,7 +6,7 @@ DYCOREPLANET_OPEN_NAMESPACE
 CoreModelData::Parameters::Parameters(const std::string &parameter_filename)
   : space_dimension(2)
   , reference_quantities(parameter_filename)
-  , physical_constants(parameter_filename, reference_quantities)
+  , physical_constants(parameter_filename)
   , final_time(1.0)
   , time_step(0.1)
   , initial_global_refinement(2)

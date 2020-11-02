@@ -15,9 +15,9 @@
 #include <deal.II/dofs/dof_renumbering.h>
 #include <deal.II/dofs/dof_tools.h>
 
+#include <deal.II/fe/fe_dgq.h>
 #include <deal.II/fe/fe_nedelec.h>
 #include <deal.II/fe/fe_raviart_thomas.h>
-#include <deal.II/fe/fe_dgq.h>
 #include <deal.II/fe/fe_system.h>
 #include <deal.II/fe/fe_values.h>
 #include <deal.II/fe/mapping_q.h>
@@ -61,38 +61,11 @@ namespace ExtersiorCalculus
     namespace Scratch
     {
       ////////////////////////////////////
-      /// NSE preconditioner
-      ////////////////////////////////////
-
-      template <int dim>
-      struct NSEPreconditioner
-      {
-        NSEPreconditioner(const double              time_step,
-                          const double              time_index,
-                          const FiniteElement<dim> &nse_fe,
-                          const Quadrature<dim> &   nse_quadrature,
-                          const Mapping<dim> &      mapping,
-                          const UpdateFlags         update_flags);
-
-        NSEPreconditioner(const NSEPreconditioner<dim> &data);
-
-        FEValues<dim> nse_fe_values;
-
-        std::vector<Tensor<1, dim>> phi_u;
-        std::vector<Tensor<2, dim>> grad_phi_u;
-        std::vector<double>         phi_p;
-
-        const double time_step;
-        const double time_index;
-      };
-
-
-      ////////////////////////////////////
       /// NSE system
       ////////////////////////////////////
 
       template <int dim>
-      struct NSESystem : public NSEPreconditioner<dim>
+      struct NSESystem
       {
         NSESystem(const double              time_step,
                   const double              time_index,
@@ -108,13 +81,18 @@ namespace ExtersiorCalculus
         FEValues<dim> temperature_fe_values;
         FEValues<dim> nse_fe_values;
 
-        std::vector<Tensor<1, dim>>          phi_u;
-        std::vector<SymmetricTensor<2, dim>> grads_phi_u;
-        std::vector<double>                  div_phi_u;
+        std::vector<Tensor<1, dim>> phi_w;
+        std::vector<Tensor<1, dim>> curl_phi_w;
+        std::vector<Tensor<1, dim>> phi_u;
+        std::vector<double>         div_phi_u;
+        std::vector<double>         phi_p;
 
         std::vector<double>         old_temperature_values;
         std::vector<Tensor<1, dim>> old_velocity_values;
-        std::vector<Tensor<2, dim>> old_velocity_grads;
+        std::vector<Tensor<1, dim>> old_vorticity_values;
+
+        const double time_step;
+        const double time_index;
       };
 
 
@@ -180,35 +158,22 @@ namespace ExtersiorCalculus
     namespace CopyData
     {
       ////////////////////////////////////
-      /// NSE preconditioner copy
-      ////////////////////////////////////
-
-      template <int dim>
-      struct NSEPreconditioner
-      {
-        NSEPreconditioner(const FiniteElement<dim> &nse_fe);
-        NSEPreconditioner(const NSEPreconditioner<dim> &data);
-
-        NSEPreconditioner<dim> &
-        operator=(const NSEPreconditioner<dim> &) = default;
-
-        FullMatrix<double>                   local_matrix;
-        std::vector<types::global_dof_index> local_dof_indices;
-      };
-
-
-      ////////////////////////////////////
       /// NSE system copy
       ////////////////////////////////////
 
       template <int dim>
-      struct NSESystem : public NSEPreconditioner<dim>
+      struct NSESystem
       {
         NSESystem(const FiniteElement<dim> &nse_fe);
 
         NSESystem(const NSESystem<dim> &data);
 
-        Vector<double> local_rhs;
+        NSESystem<dim> &
+        operator=(const NSESystem<dim> &) = default;
+
+        Vector<double>                       local_rhs;
+        FullMatrix<double>                   local_matrix;
+        std::vector<types::global_dof_index> local_dof_indices;
       };
 
 

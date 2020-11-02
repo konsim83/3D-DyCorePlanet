@@ -15,9 +15,12 @@ namespace ExtersiorCalculus
                           parameters_.physical_constants.R1)
     , parameters(parameters_)
     , mapping(3)
-    , nse_fe(FE_Nedelec<dim>(parameters.nse_velocity_degree), 1,
-             FE_RaviartThomas<dim>(parameters.nse_velocity_degree), 1,
-             FE_Q<dim>(parameters.nse_velocity_degree - 1), 1)
+    , nse_fe(FE_Nedelec<dim>(parameters.nse_velocity_degree),
+             1,
+             FE_RaviartThomas<dim>(parameters.nse_velocity_degree),
+             1,
+             FE_Q<dim>(parameters.nse_velocity_degree - 1),
+             1)
     , nse_dof_handler(this->triangulation)
     , temperature_fe(parameters.temperature_degree)
     , temperature_dof_handler(this->triangulation)
@@ -58,10 +61,11 @@ namespace ExtersiorCalculus
                                               nse_partitioning,
                                               nse_relevant_partitioning,
                                               this->mpi_communicator);
-    Table<2, DoFTools::Coupling>           coupling(dim + 1, dim + 1);
-    for (unsigned int c = 0; c < dim + 1; ++c)
-      for (unsigned int d = 0; d < dim + 1; ++d)
-        if (!((c == dim) && (d == dim)))
+
+    Table<2, DoFTools::Coupling> coupling(dim + 1, dim + 1);
+    for (unsigned int c = 0; c < 2 * dim + 1; ++c)
+      for (unsigned int d = 0; d < 2 * dim + 1; ++d)
+        if (!((c == 2 * dim) && (d == 2 * dim)))
           coupling[c][d] = DoFTools::always;
         else
           coupling[c][d] = DoFTools::none;
@@ -83,44 +87,6 @@ namespace ExtersiorCalculus
   }
 
 
-
-  template <int dim>
-  void
-  BoussinesqModel<dim>::setup_nse_preconditioner(
-    const std::vector<IndexSet> &nse_partitioning,
-    const std::vector<IndexSet> &nse_relevant_partitioning)
-  {
-    Amg_preconditioner.reset();
-    Mp_preconditioner.reset();
-
-    nse_preconditioner_matrix.clear();
-    TrilinosWrappers::BlockSparsityPattern sp(nse_partitioning,
-                                              nse_partitioning,
-                                              nse_relevant_partitioning,
-                                              this->mpi_communicator);
-
-    Table<2, DoFTools::Coupling> coupling(dim + 1, dim + 1);
-    for (unsigned int c = 0; c < dim + 1; ++c)
-      for (unsigned int d = 0; d < dim + 1; ++d)
-        if (c == d)
-          coupling[c][d] = DoFTools::always;
-        else
-          coupling[c][d] = DoFTools::none;
-
-    DoFTools::make_sparsity_pattern(nse_dof_handler,
-                                    coupling,
-                                    sp,
-                                    nse_constraints,
-                                    false,
-                                    Utilities::MPI::this_mpi_process(
-                                      this->mpi_communicator));
-    sp.compress();
-
-    nse_preconditioner_matrix.reinit(sp);
-  }
-
-
-
   template <int dim>
   void
   BoussinesqModel<dim>::setup_temperature_matrices(
@@ -136,6 +102,7 @@ namespace ExtersiorCalculus
                                          temperature_partitioner,
                                          temperature_relevant_partitioner,
                                          this->mpi_communicator);
+
     DoFTools::make_sparsity_pattern(temperature_dof_handler,
                                     sp,
                                     temperature_constraints,
@@ -162,8 +129,12 @@ namespace ExtersiorCalculus
     /*
      * Setup dof handlers for nse and temperature
      */
-    std::vector<unsigned int> nse_sub_blocks(dim + 1, 0);
-    nse_sub_blocks[dim] = 1;
+    std::vector<unsigned int> nse_sub_blocks(2 * dim + 1, 0);
+    for (unsigned int d = dim; d < 2 * dim; ++d)
+      {
+        nse_sub_blocks[d] = 1;
+      }
+    nse_sub_blocks[2 * dim] = 2;
 
     nse_dof_handler.distribute_dofs(nse_fe);
     if (parameters.use_schur_complement_solver)
@@ -179,11 +150,12 @@ namespace ExtersiorCalculus
     /*
      * Count dofs
      */
-    std::vector<types::global_dof_index> nse_dofs_per_block(2);
+    std::vector<types::global_dof_index> nse_dofs_per_block(3);
     DoFTools::count_dofs_per_block(nse_dof_handler,
                                    nse_dofs_per_block,
                                    nse_sub_blocks);
-    const unsigned int n_u = nse_dofs_per_block[0], n_p = nse_dofs_per_block[1],
+    const unsigned int n_w = nse_dofs_per_block[0], n_u = nse_dofs_per_block[1],
+                       n_p = nse_dofs_per_block[2],
                        n_T = temperature_dof_handler.n_dofs();
 
     /*
@@ -199,7 +171,8 @@ namespace ExtersiorCalculus
                 << this->triangulation.n_global_active_cells() << " (on "
                 << this->triangulation.n_levels() << " levels)" << std::endl
                 << "Number of degrees of freedom: " << n_u + n_p + n_T << " ("
-                << n_u << '+' << n_p << '+' << n_T << ')' << std::endl
+                << n_w << " + " << n_u << " + " << n_p << " + " << n_T << ")"
+                << std::endl
                 << std::endl;
     this->pcout.get_stream().imbue(s);
 
@@ -212,13 +185,17 @@ namespace ExtersiorCalculus
 
     {
       nse_index_set = nse_dof_handler.locally_owned_dofs();
-      nse_partitioning.push_back(nse_index_set.get_view(0, n_u));
-      nse_partitioning.push_back(nse_index_set.get_view(n_u, n_u + n_p));
+      nse_partitioning.push_back(nse_index_set.get_view(0, n_w));
+      nse_partitioning.push_back(nse_index_set.get_view(n_w, n_w + n_u));
+      nse_partitioning.push_back(
+        nse_index_set.get_view(n_w + n_u, n_w + n_u + n_p));
+
       DoFTools::extract_locally_relevant_dofs(nse_dof_handler,
                                               nse_relevant_set);
-      nse_relevant_partitioning.push_back(nse_relevant_set.get_view(0, n_u));
-      nse_relevant_partitioning.push_back(
-        nse_relevant_set.get_view(n_u, n_u + n_p));
+      nse_partitioning.push_back(nse_relevant_set.get_view(0, n_w));
+      nse_partitioning.push_back(nse_relevant_set.get_view(n_w, n_w + n_u));
+      nse_partitioning.push_back(
+        nse_relevant_set.get_view(n_w + n_u, n_w + n_u + n_p));
       temperature_partitioning = temperature_dof_handler.locally_owned_dofs();
       DoFTools::extract_locally_relevant_dofs(
         temperature_dof_handler, temperature_relevant_partitioning);
@@ -234,25 +211,39 @@ namespace ExtersiorCalculus
       nse_constraints.reinit(nse_relevant_set);
       DoFTools::make_hanging_node_constraints(nse_dof_handler, nse_constraints);
 
-      FEValuesExtractors::Vector velocity_components(0);
-
-      // No-slip on boundary 0 (lower)
-      VectorTools::interpolate_boundary_values(
-        nse_dof_handler,
-        0,
+      /*
+       * Lower boundary (id=0)
+       */
+      VectorTools::project_boundary_values_curl_conforming_l2(
+        dof_handler,
+        /*first vector component */ 0,
+        Functions::ZeroFunction<dim>(2 * dim + 1),
+        /*boundary id*/ 0,
+        nse_constraints);
+      VectorTools::project_boundary_values_div_conforming(
+        dof_handler,
+        /*first vector component */
+        3,
         Functions::ZeroFunction<dim>(dim + 1),
-        nse_constraints,
-        nse_fe.component_mask(velocity_components));
+        /*boundary id*/ 0,
+        nse_constraints);
 
-      // No-flux on upper boundary
-      std::set<types::boundary_id> no_normal_flux_boundaries;
-      no_normal_flux_boundaries.insert(1);
-
-      VectorTools::compute_no_normal_flux_constraints(nse_dof_handler,
-                                                      0,
-                                                      no_normal_flux_boundaries,
-                                                      nse_constraints,
-                                                      mapping);
+      /*
+       * Upper boundary (id=1)
+       */
+      VectorTools::project_boundary_values_curl_conforming_l2(
+        dof_handler,
+        /*first vector component */ 0,
+        Functions::ZeroFunction<dim>(2 * dim + 1),
+        /*boundary id*/ 1,
+        nse_constraints);
+      VectorTools::project_boundary_values_div_conforming(
+        dof_handler,
+        /*first vector component */
+        3,
+        Functions::ZeroFunction<dim>(dim + 1),
+        /*boundary id*/ 1,
+        nse_constraints);
 
       nse_constraints.close();
     }
@@ -268,7 +259,7 @@ namespace ExtersiorCalculus
       // Lower boundary
       VectorTools::interpolate_boundary_values(
         temperature_dof_handler,
-        0,
+        /*boundary id*/ 0,
         CoreModelData::Boussinesq::TemperatureInitialValues<dim>(
           parameters.physical_constants.R0, parameters.physical_constants.R1),
         temperature_constraints);
@@ -302,147 +293,6 @@ namespace ExtersiorCalculus
   }
 
 
-
-  /////////////////////////////////////////////////////////////
-  // Assembly NSE preconditioner
-  /////////////////////////////////////////////////////////////
-
-
-  template <int dim>
-  void
-  BoussinesqModel<dim>::local_assemble_nse_preconditioner(
-    const typename DoFHandler<dim>::active_cell_iterator &cell,
-    Assembly::Scratch::NSEPreconditioner<dim> &           scratch,
-    Assembly::CopyData::NSEPreconditioner<dim> &          data)
-  {
-    const unsigned int dofs_per_cell = nse_fe.dofs_per_cell;
-    const unsigned int n_q_points = scratch.nse_fe_values.n_quadrature_points;
-
-    const FEValuesExtractors::Vector velocities(0);
-    const FEValuesExtractors::Scalar pressure(dim);
-
-    const double one_over_reynolds_number =
-      (1. / CoreModelData::get_reynolds_number(
-              parameters.reference_quantities.velocity,
-              parameters.reference_quantities.length,
-              parameters.physical_constants.kinematic_viscosity));
-
-    scratch.nse_fe_values.reinit(cell);
-
-    cell->get_dof_indices(data.local_dof_indices);
-    data.local_matrix = 0;
-
-    for (unsigned int q = 0; q < n_q_points; ++q)
-      {
-        for (unsigned int k = 0; k < dofs_per_cell; ++k)
-          {
-            scratch.phi_u[k] = scratch.nse_fe_values[velocities].value(k, q);
-            scratch.grad_phi_u[k] =
-              scratch.nse_fe_values[velocities].gradient(k, q);
-            scratch.phi_p[k] = scratch.nse_fe_values[pressure].value(k, q);
-          }
-
-        for (unsigned int i = 0; i < dofs_per_cell; ++i)
-          for (unsigned int j = 0; j < dofs_per_cell; ++j)
-            data.local_matrix(i, j) +=
-              (scratch.phi_u[i] * scratch.phi_u[j] +
-               parameters.time_step * one_over_reynolds_number *
-                 scalar_product(scratch.grad_phi_u[i], scratch.grad_phi_u[j]) +
-               scratch.phi_p[i] * scratch.phi_p[j]) *
-              scratch.nse_fe_values.JxW(q);
-      }
-  }
-
-
-
-  template <int dim>
-  void
-  BoussinesqModel<dim>::copy_local_to_global_nse_preconditioner(
-    const Assembly::CopyData::NSEPreconditioner<dim> &data)
-  {
-    nse_constraints.distribute_local_to_global(data.local_matrix,
-                                               data.local_dof_indices,
-                                               nse_preconditioner_matrix);
-  }
-
-
-  template <int dim>
-  void
-  BoussinesqModel<dim>::assemble_nse_preconditioner(const double time_index)
-  {
-    TimerOutput::Scope timer_section(this->computing_timer,
-                                     "   Assembly NSE preconditioner");
-
-    nse_preconditioner_matrix = 0;
-    const QGauss<dim> quadrature_formula(parameters.nse_velocity_degree + 1);
-    using CellFilter =
-      FilteredIterator<typename DoFHandler<dim>::active_cell_iterator>;
-
-    WorkStream::run(
-      CellFilter(IteratorFilters::LocallyOwnedCell(),
-                 nse_dof_handler.begin_active()),
-      CellFilter(IteratorFilters::LocallyOwnedCell(), nse_dof_handler.end()),
-      std::bind(&BoussinesqModel<dim>::local_assemble_nse_preconditioner,
-                this,
-                std::placeholders::_1,
-                std::placeholders::_2,
-                std::placeholders::_3),
-      std::bind(&BoussinesqModel<dim>::copy_local_to_global_nse_preconditioner,
-                this,
-                std::placeholders::_1),
-      Assembly::Scratch::NSEPreconditioner<dim>(parameters.time_step,
-                                                time_index,
-                                                nse_fe,
-                                                quadrature_formula,
-                                                mapping,
-                                                update_JxW_values |
-                                                  update_values |
-                                                  update_gradients),
-      Assembly::CopyData::NSEPreconditioner<dim>(nse_fe));
-
-    nse_preconditioner_matrix.compress(VectorOperation::add);
-  }
-
-
-
-  template <int dim>
-  void
-  BoussinesqModel<dim>::build_nse_preconditioner(const double time_index)
-  {
-    TimerOutput::Scope timer_section(this->computing_timer,
-                                     "   Build NSE preconditioner");
-
-    this->pcout
-      << "   Assembling and building Navier-Stokes block preconditioner..."
-      << std::flush;
-
-    assemble_nse_preconditioner(time_index);
-
-    std::vector<std::vector<bool>> constant_modes;
-    FEValuesExtractors::Vector     velocity_components(0);
-    DoFTools::extract_constant_modes(nse_dof_handler,
-                                     nse_fe.component_mask(velocity_components),
-                                     constant_modes);
-    Mp_preconditioner =
-      std::make_shared<TrilinosWrappers::PreconditionJacobi>();
-    Amg_preconditioner = std::make_shared<TrilinosWrappers::PreconditionAMG>();
-
-    TrilinosWrappers::PreconditionAMG::AdditionalData Amg_data;
-    Amg_data.constant_modes        = constant_modes;
-    Amg_data.elliptic              = true;
-    Amg_data.higher_order_elements = true;
-    Amg_data.smoother_sweeps       = 1;
-    Amg_data.aggregation_threshold = 0.02;
-
-    Mp_preconditioner->initialize(nse_preconditioner_matrix.block(1, 1));
-    Amg_preconditioner->initialize(nse_preconditioner_matrix.block(0, 0),
-                                   Amg_data);
-
-    this->pcout << std::endl;
-  }
-
-
-
   /////////////////////////////////////////////////////////////
   // Assembly NSE system
   /////////////////////////////////////////////////////////////
@@ -458,8 +308,9 @@ namespace ExtersiorCalculus
       scratch.nse_fe_values.get_fe().dofs_per_cell;
     const unsigned int n_q_points = scratch.nse_fe_values.n_quadrature_points;
 
-    const FEValuesExtractors::Vector velocities(0);
-    const FEValuesExtractors::Scalar pressure(dim);
+    const FEValuesExtractors::Vector vorticity(0);
+    const FEValuesExtractors::Vector velocities(dim);
+    const FEValuesExtractors::Scalar pressure(2 * dim);
 
     const double one_over_reynolds_number =
       (1. / CoreModelData::get_reynolds_number(
@@ -480,31 +331,33 @@ namespace ExtersiorCalculus
     data.local_matrix = 0;
     data.local_rhs    = 0;
 
+    /*
+     * Get some values at the previous time step
+     */
     scratch.temperature_fe_values.get_function_values(
       old_temperature_solution, scratch.old_temperature_values);
-
+    scratch.nse_fe_values[vorticity].get_function_values(
+      old_nse_solution, scratch.old_vorticity_values);
     scratch.nse_fe_values[velocities].get_function_values(
       old_nse_solution, scratch.old_velocity_values);
-    scratch.nse_fe_values[velocities].get_function_gradients(
-      old_nse_solution, scratch.old_velocity_grads);
 
     for (unsigned int q = 0; q < n_q_points; ++q)
       {
         const double old_temperature = scratch.old_temperature_values[q];
         const double density_scaling = CoreModelData::density_scaling(
-          parameters.reference_quantities.density,
+          parameters.physical_constants.density,
           old_temperature,
           parameters.reference_quantities.temperature_ref);
-        const Tensor<1, dim> old_velocity = scratch.old_velocity_values[q];
-        const Tensor<2, dim> old_velocity_grads =
-          transpose(scratch.old_velocity_grads[q]);
+        const Tensor<1, dim> old_vorticity = scratch.old_vorticity_values[q];
+        const Tensor<1, dim> old_velocity  = scratch.old_velocity_values[q];
 
         for (unsigned int k = 0; k < dofs_per_cell; ++k)
           {
-            scratch.phi_u[k] = scratch.nse_fe_values[velocities].value(k, q);
+            scratch.phi_w[k] = scratch.nse_fe_values[vorticity].value(k, q);
 
-            scratch.grads_phi_u[k] = transpose(
-              scratch.nse_fe_values[velocities].symmetric_gradient(k, q));
+            scratch.curl_phi_w[k] = scratch.nse_fe_values[vorticity].curl(k, q);
+
+            scratch.phi_u[k] = scratch.nse_fe_values[velocities].value(k, q);
 
             scratch.div_phi_u[k] =
               scratch.nse_fe_values[velocities].divergence(k, q);
@@ -513,9 +366,11 @@ namespace ExtersiorCalculus
           }
 
         const Tensor<1, dim> coriolis =
+          parameters.reference_quantities.length *
           CoreModelData::coriolis_vector(scratch.nse_fe_values.quadrature_point(
                                            q),
-                                         parameters.reference_quantities.omega);
+                                         parameters.physical_constants.omega) /
+          parameters.reference_quantities.velocity;
 
         /*
          * Move everything to the LHS here.
@@ -523,21 +378,25 @@ namespace ExtersiorCalculus
         for (unsigned int i = 0; i < dofs_per_cell; ++i)
           for (unsigned int j = 0; j < dofs_per_cell; ++j)
             data.local_matrix(i, j) +=
-              (scratch.phi_u[i] * scratch.phi_u[j] // mass term
+              (scratch.phi_w[i] * scratch.phi_w[j]        // mass_w term
+               - scratch.curl_phi_w[i] * scratch.phi_w[j] // rot_w term
+               + scratch.phi_u[i] * scratch.phi_u[j]      // mass_u term
                + parameters.time_step *
-                   (one_over_reynolds_number * 2 * scratch.grads_phi_u[i] *
-                    scratch.grads_phi_u[j]) // eps(v):sigma(eps(u))
-               -
-               (scratch.div_phi_u[i] *
-                scratch
-                  .phi_p[j]) // div(v)*p ---> we solve for scaled pressure dt*p
-               - (scratch.phi_p[i] * scratch.div_phi_u[j]) // q*div(u)
+                   (one_over_reynolds_number * scratch.phi_u[i] *
+                    scratch.curl_phi_w[j]) // 1/Re * v * curl(w)
+               - (scratch.div_phi_u[i] *
+                  scratch.phi_p[j]) // div(v)*p ---> scaled pressure dt*p
+               + (scratch.phi_p[i] * scratch.div_phi_u[j]) // q*div(u)
                ) *
               scratch.nse_fe_values.JxW(q);
 
-        const Tensor<1, dim> gravity = CoreModelData::gravity_vector(
-          scratch.nse_fe_values.quadrature_point(q),
-          parameters.physical_constants.gravity_constant);
+        const Tensor<1, dim> gravity =
+          (parameters.reference_quantities.length /
+           (parameters.reference_quantities.velocity *
+            parameters.reference_quantities.velocity)) *
+          CoreModelData::gravity_vector(
+            scratch.nse_fe_values.quadrature_point(q),
+            parameters.physical_constants.gravity_constant);
 
         /*
          * This is only the RHS
@@ -547,12 +406,19 @@ namespace ExtersiorCalculus
             (scratch.phi_u[i] * old_velocity +
              parameters.time_step * density_scaling * gravity *
                scratch.phi_u[i] -
-             parameters.time_step * scratch.phi_u[i] *
-               (old_velocity * old_velocity_grads) // advection at previous time
-             - (dim == 2 ? -parameters.time_step * 2 *
-                             parameters.reference_quantities.omega *
+             parameters.time_step *
+               (scratch.div_phi_u[i] * 0.5 *
+                  scalar_product(old_velocity, old_velocity) -
+                scratch.phi_u[i] *
+                  (dim == 2 ? old_vorticity * cross_product_2d(old_velocity) :
+                              cross_product_3d(
+                                old_vorticity,
+                                old_velocity))) // advection at previous time
+             -
+             parameters.time_step *
+               (dim == 2 ? -2 * parameters.physical_constants.omega *
                              scratch.phi_u[i] * cross_product_2d(old_velocity) :
-                           parameters.time_step * 2 * scratch.phi_u[i] *
+                           2 * scratch.phi_u[i] *
                              cross_product_3d(coriolis,
                                               old_velocity)) // coriolis force)
              ) *
@@ -810,6 +676,9 @@ namespace ExtersiorCalculus
           }
 
         const double gamma =
+          (parameters.reference_quantities.length /
+           (parameters.reference_quantities.velocity *
+            parameters.reference_quantities.temperature_ref)) *
           0; // CoreModelData::Boussinesq::TemperatureRHS value at quad point
 
         for (unsigned int i = 0; i < dofs_per_cell; ++i)
@@ -977,11 +846,11 @@ namespace ExtersiorCalculus
   void
   BoussinesqModel<dim>::recompute_time_step()
   {
-    const double scaling = (dim == 3 ? 0.25 : 1.0);
     /*
      * Since we have the same geometry as in Deal.ii's mantle convection code
      * (step-32) we can determine the new step similarly.
      */
+    const double scaling = (dim == 3 ? 0.25 : 1.0);
     parameters.time_step = (scaling / (2.1 * dim * std::sqrt(1. * dim)) /
                             (parameters.temperature_degree * get_cfl_number()));
 
@@ -1006,113 +875,6 @@ namespace ExtersiorCalculus
 
   template <int dim>
   void
-  BoussinesqModel<dim>::solve_NSE_block_preconditioned()
-  {
-    if ((timestep_number == 0) ||
-        ((timestep_number > 0) &&
-         (timestep_number % parameters.NSE_solver_interval == 0)))
-      {
-        TimerOutput::Scope timer_section(this->computing_timer,
-                                         "   Solve Stokes system");
-        this->pcout
-          << "   Solving Navier-Stokes system for one timestep with (block preconditioned solver)... "
-          << std::flush;
-
-        TrilinosWrappers::MPI::BlockVector distributed_nse_solution(nse_rhs);
-        distributed_nse_solution = nse_solution;
-
-        const unsigned int
-          start = (distributed_nse_solution.block(0).size() +
-                   distributed_nse_solution.block(1).local_range().first),
-          end   = (distributed_nse_solution.block(0).size() +
-                 distributed_nse_solution.block(1).local_range().second);
-
-        for (unsigned int i = start; i < end; ++i)
-          if (nse_constraints.is_constrained(i))
-            distributed_nse_solution(i) = 0;
-
-        PrimitiveVectorMemory<TrilinosWrappers::MPI::BlockVector> mem;
-        unsigned int  n_iterations     = 0;
-        const double  solver_tolerance = 1e-8 * nse_rhs.l2_norm();
-        SolverControl solver_control(30, solver_tolerance);
-
-        /*
-         * We have only the actual pressure but need
-         * to solve for a scaled pressure to keep the
-         * system symmetric. Hence for the initial guess
-         * we need to transform to the rescaled version.
-         */
-        distributed_nse_solution.block(1) *= parameters.time_step;
-
-        try
-          {
-            const LinearAlgebra::BlockSchurPreconditioner<
-              TrilinosWrappers::PreconditionAMG,
-              TrilinosWrappers::PreconditionJacobi>
-              preconditioner(nse_matrix,
-                             nse_preconditioner_matrix,
-                             *Mp_preconditioner,
-                             *Amg_preconditioner,
-                             false);
-
-            SolverFGMRES<TrilinosWrappers::MPI::BlockVector> solver(
-              solver_control,
-              mem,
-              SolverFGMRES<TrilinosWrappers::MPI::BlockVector>::AdditionalData(
-                30));
-
-            solver.solve(nse_matrix,
-                         distributed_nse_solution,
-                         nse_rhs,
-                         preconditioner);
-
-            n_iterations = solver_control.last_step();
-          }
-        catch (SolverControl::NoConvergence &)
-          {
-            const LinearAlgebra::BlockSchurPreconditioner<
-              TrilinosWrappers::PreconditionAMG,
-              TrilinosWrappers::PreconditionJacobi>
-              preconditioner(nse_matrix,
-                             nse_preconditioner_matrix,
-                             *Mp_preconditioner,
-                             *Amg_preconditioner,
-                             true);
-
-            SolverControl solver_control_refined(nse_matrix.m(),
-                                                 solver_tolerance);
-
-            SolverFGMRES<TrilinosWrappers::MPI::BlockVector> solver(
-              solver_control_refined,
-              mem,
-              SolverFGMRES<TrilinosWrappers::MPI::BlockVector>::AdditionalData(
-                50));
-
-            solver.solve(nse_matrix,
-                         distributed_nse_solution,
-                         nse_rhs,
-                         preconditioner);
-
-            n_iterations =
-              (solver_control.last_step() + solver_control_refined.last_step());
-          }
-        nse_constraints.distribute(distributed_nse_solution);
-
-        /*
-         * We solved only for a scaled pressure to
-         * keep the system symmetric. So retransform.
-         */
-        distributed_nse_solution.block(1) /= parameters.time_step;
-
-        nse_solution = distributed_nse_solution;
-
-        this->pcout << n_iterations << " iterations." << std::endl;
-      } // solver time intervall constraint
-  }
-
-
-  template <int dim>
-  void
   BoussinesqModel<dim>::solve_NSE_Schur_complement()
   {
     if ((timestep_number == 0) ||
@@ -1122,31 +884,40 @@ namespace ExtersiorCalculus
         TimerOutput::Scope timer_section(this->computing_timer,
                                          "   Solve NSE system");
         this->pcout
-          << "   Solving Navier-Stokes system for one timestep with (preconditioned Schur complement solver)... "
+          << "   Solving Navier-Stokes system for one time step with (preconditioned Schur complement solver)... "
           << std::endl;
 
         /*
-         * Initialize the inner preconditioner.
+         * Initialize the preconditioner of the mass matrix in H(curl).
          */
-        inner_schur_preconditioner = std::make_shared<
+        Mw_schur_preconditioner = std::make_shared<
           typename LinearAlgebra::InnerSchurPreconditioner::type>();
-
         // Fill preconditioner with life
-        inner_schur_preconditioner->initialize(nse_matrix.block(0, 0), data);
+        Mw_schur_preconditioner->initialize(nse_matrix.block(0, 0), data);
+
+        /*
+         * Initialize the preconditioner of the mass matrix in H(div).
+         */
+        Mu_schur_preconditioner = std::make_shared<
+          typename LinearAlgebra::InnerSchurPreconditioner::type>();
+        // Fill preconditioner with life
+        Mu_schur_preconditioner->initialize(nse_matrix.block(1, 1), data);
 
         const LinearAlgebra::InverseMatrix<
           LA::SparseMatrix,
           typename LinearAlgebra::InnerSchurPreconditioner::type>
-          block_inverse(nse_matrix.block(0, 0), *inner_schur_preconditioner);
+          Mw_inverse(nse_matrix.block(0, 0), *Mw_schur_preconditioner);
 
         TrilinosWrappers::MPI::BlockVector distributed_nse_solution(nse_rhs);
         distributed_nse_solution = nse_solution;
 
         const unsigned int
           start = (distributed_nse_solution.block(0).size() +
-                   distributed_nse_solution.block(1).local_range().first),
+                   distributed_nse_solution.block(1).size() +
+                   distributed_nse_solution.block(2).local_range().first),
           end   = (distributed_nse_solution.block(0).size() +
-                 distributed_nse_solution.block(1).local_range().second);
+                 distributed_nse_solution.block(1).size() +
+                 distributed_nse_solution.block(2).local_range().second);
 
         for (unsigned int i = start; i < end; ++i)
           if (nse_constraints.is_constrained(i))
@@ -1567,7 +1338,7 @@ namespace ExtersiorCalculus
                 << parameters.physical_constants.atm_height << std::endl
                 << std::endl
                 << "Reference pressure                   :   "
-                << parameters.reference_quantities.pressure << std::endl
+                << parameters.physical_constants.pressure << std::endl
                 << "Reference length                     :   "
                 << parameters.reference_quantities.length << std::endl
                 << "Reference velocity                   :   "

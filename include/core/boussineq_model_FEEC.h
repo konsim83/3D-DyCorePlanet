@@ -68,7 +68,6 @@
 #include <core/planet_geometry.h>
 #include <linear_algebra/approximate_inverse.hpp>
 #include <linear_algebra/approximate_schur_complement.hpp>
-#include <linear_algebra/block_schur_preconditioner.hpp>
 #include <linear_algebra/inverse_matrix.hpp>
 #include <linear_algebra/preconditioner.h>
 #include <linear_algebra/schur_complement.hpp>
@@ -155,20 +154,9 @@ namespace ExtersiorCalculus
                        const std::vector<IndexSet> &nse_relevant_partitioning);
 
     void
-    setup_nse_preconditioner(
-      const std::vector<IndexSet> &nse_partitioning,
-      const std::vector<IndexSet> &nse_relevant_partitioning);
-
-    void
     setup_temperature_matrices(
       const IndexSet &temperature_partitioning,
       const IndexSet &temperature_relevant_partitioning);
-
-    void
-    assemble_nse_preconditioner(const double time_index);
-
-    void
-    build_nse_preconditioner(const double time_index);
 
     void
     assemble_nse_system(const double time_index);
@@ -187,9 +175,6 @@ namespace ExtersiorCalculus
 
     void
     recompute_time_step();
-
-    void
-    solve_NSE_block_preconditioned();
 
     void
     solve_NSE_Schur_complement();
@@ -218,7 +203,6 @@ namespace ExtersiorCalculus
     std::vector<IndexSet> nse_partitioning, nse_relevant_partitioning;
 
     LA::BlockSparseMatrix nse_matrix;
-    LA::BlockSparseMatrix nse_preconditioner_matrix;
     LA::BlockSparseMatrix nse_mass_matrix;
     LA::BlockSparseMatrix nse_advection_matrix;
     LA::BlockSparseMatrix nse_diffusion_matrix;
@@ -243,22 +227,9 @@ namespace ExtersiorCalculus
 
     unsigned int timestep_number;
 
-    std::shared_ptr<LA::PreconditionAMG>    Amg_preconditioner;
-    std::shared_ptr<LA::PreconditionJacobi> Mp_preconditioner;
     std::shared_ptr<LA::PreconditionJacobi> T_preconditioner;
 
     const bool rebuild_temperature_preconditioner = true;
-
-
-    void
-    local_assemble_nse_preconditioner(
-      const typename DoFHandler<dim>::active_cell_iterator &cell,
-      Assembly::Scratch::NSEPreconditioner<dim> &           scratch,
-      Assembly::CopyData::NSEPreconditioner<dim> &          data);
-
-    void
-    copy_local_to_global_nse_preconditioner(
-      const Assembly::CopyData::NSEPreconditioner<dim> &data);
 
     void
     local_assemble_nse_system(
@@ -293,7 +264,7 @@ namespace ExtersiorCalculus
     class Postprocessor;
 
     std::shared_ptr<typename LinearAlgebra::InnerSchurPreconditioner::type>
-                                                                           inner_schur_preconditioner;
+                                                                           Mw_schur_preconditioner, Mu_schur_preconditioner;
     typename LinearAlgebra::InnerSchurPreconditioner::type::AdditionalData data;
     bool is_initialized_inner_schur_preconditioner = false;
   };

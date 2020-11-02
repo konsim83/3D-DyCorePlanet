@@ -102,7 +102,7 @@ namespace LinearAlgebra
     /*!
      * Muatable distributed types for temporary vectors.
      */
-    mutable VectorType tmp1, tmp2, tmp3;
+    mutable VectorType tmp1, tmp2;
   };
 
 
@@ -124,7 +124,6 @@ namespace LinearAlgebra
     , mpi_communicator(mpi_communicator)
     , tmp1(owned_partitioning[0], mpi_communicator)
     , tmp2(owned_partitioning[0], mpi_communicator)
-    , tmp3(owned_partitioning[1], mpi_communicator)
   {
     typename PreconditionerType::AdditionalData data;
     preconditioner.initialize(system_matrix.block(0, 0), data);
@@ -140,8 +139,6 @@ namespace LinearAlgebra
     system_matrix->block(0, 1).vmult(tmp1, src);
     preconditioner.vmult(tmp2, tmp1);
     system_matrix->block(1, 0).vmult(dst, tmp2);
-    system_matrix->block(1, 1).vmult(tmp3, src);
-    dst -= tmp3;
   }
 
 } // namespace LinearAlgebra
