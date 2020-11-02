@@ -60,11 +60,18 @@ namespace LinearAlgebra
   public:
     /*!
      * Constructor. The user must take care to pass the correct inverse of the
-     * upper left of the system matrix.
+     * upper left block of the system matrix.
+     *
+     * @param system_matrix
+     * 	Block Matrix
+     * @param relevant_inverse_matrix
+     * 	Inverse of upper left block of the system matrix.
+     * @param owned_partitioning
+     * @param mpi_communicator
      */
     NestedSchurComplement(const BlockMatrixType &system_matrix,
                           const InverseMatrix<BlockType, PreconditionerType>
-                            &inverse_matrix_block_00,
+                            &                          relevant_inverse_matrix,
                           const std::vector<IndexSet> &owned_partitioning,
                           MPI_Comm                     mpi_communicator);
 
@@ -79,16 +86,20 @@ namespace LinearAlgebra
 
   private:
     /*!
-     * Smart pointer to system matrix.
+     * Smart pointer to system matrix block 12.
      */
-    const SmartPointer<const BlockMatrixType> block_system_matrix;
+    const SmartPointer<const BlockType> block_12;
 
     /*!
-     * Smart pointer to inverse upper left block of the system
-     * matrix.
+     * Smart pointer to system matrix block 21.
+     */
+    const SmartPointer<const BlockType> block_21;
+
+    /*!
+     * Smart pointer to inverse upper left block of the system matrix.
      */
     const SmartPointer<const InverseMatrix<BlockType, PreconditionerType>>
-      inverse_matrix_block_00;
+      relevant_inverse_matrix;
 
     /*!
      * Index set to initialize tmp vectors using only locally owned partition.
@@ -121,12 +132,13 @@ namespace LinearAlgebra
                             &                          relevant_inverse_matrix,
                           const std::vector<IndexSet> &owned_partitioning,
                           MPI_Comm                     mpi_communicator)
-    : block_system_matrix(&system_matrix)
-    , inverse_matrix_block_00(&inverse_matrix_block_00)
+    : block_12(&(system_matrix.block(1, 2)))
+    , block_21(&(system_matrix.block(2, 1)))
+    , relevant_inverse_matrix(&relevant_inverse_matrix)
     , owned_partitioning(owned_partitioning)
     , mpi_communicator(mpi_communicator)
-    , tmp1(owned_partitioning[0], mpi_communicator)
-    , tmp2(owned_partitioning[0], mpi_communicator)
+    , tmp1(owned_partitioning[1], mpi_communicator)
+    , tmp2(owned_partitioning[1], mpi_communicator)
   {}
 
   template <typename BlockMatrixType,
@@ -137,9 +149,9 @@ namespace LinearAlgebra
     VectorType &      dst,
     const VectorType &src) const
   {
-    block_01->vmult(tmp1, src);
+    block_12->vmult(tmp1, src);
     relevant_inverse_matrix->vmult(tmp2, tmp1);
-    block_10->vmult(dst, tmp2);
+    block_21->vmult(dst, tmp2);
   }
 } // end namespace LinearAlgebra
 

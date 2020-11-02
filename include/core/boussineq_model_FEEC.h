@@ -16,9 +16,9 @@
 #include <deal.II/dofs/dof_renumbering.h>
 #include <deal.II/dofs/dof_tools.h>
 
+#include <deal.II/fe/fe_dgq.h>
 #include <deal.II/fe/fe_nedelec.h>
 #include <deal.II/fe/fe_raviart_thomas.h>
-#include <deal.II/fe/fe_dgq.h>
 #include <deal.II/fe/fe_system.h>
 #include <deal.II/fe/fe_values.h>
 #include <deal.II/fe/mapping_q.h>
@@ -70,6 +70,8 @@
 #include <linear_algebra/approximate_schur_complement.hpp>
 #include <linear_algebra/inverse_matrix.hpp>
 #include <linear_algebra/preconditioner.h>
+#include <linear_algebra/nested_schur_complement.hpp>
+#include <linear_algebra/shifted_schur_complement.hpp>
 #include <linear_algebra/schur_complement.hpp>
 #include <model_data/boussinesq_model_data.h>
 #include <model_data/boussinesq_model_parameters.h>
@@ -264,7 +266,7 @@ namespace ExtersiorCalculus
     class Postprocessor;
 
     std::shared_ptr<typename LinearAlgebra::InnerSchurPreconditioner::type>
-                                                                           Mw_schur_preconditioner, Mu_schur_preconditioner;
+                                                                           Mw_schur_preconditioner;
     typename LinearAlgebra::InnerSchurPreconditioner::type::AdditionalData data;
     bool is_initialized_inner_schur_preconditioner = false;
   };

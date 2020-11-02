@@ -888,26 +888,8 @@ namespace ExtersiorCalculus
           << std::endl;
 
         /*
-         * Initialize the preconditioner of the mass matrix in H(curl).
+         * Prepare vectors
          */
-        Mw_schur_preconditioner = std::make_shared<
-          typename LinearAlgebra::InnerSchurPreconditioner::type>();
-        // Fill preconditioner with life
-        Mw_schur_preconditioner->initialize(nse_matrix.block(0, 0), data);
-
-        /*
-         * Initialize the preconditioner of the mass matrix in H(div).
-         */
-        Mu_schur_preconditioner = std::make_shared<
-          typename LinearAlgebra::InnerSchurPreconditioner::type>();
-        // Fill preconditioner with life
-        Mu_schur_preconditioner->initialize(nse_matrix.block(1, 1), data);
-
-        const LinearAlgebra::InverseMatrix<
-          LA::SparseMatrix,
-          typename LinearAlgebra::InnerSchurPreconditioner::type>
-          Mw_inverse(nse_matrix.block(0, 0), *Mw_schur_preconditioner);
-
         TrilinosWrappers::MPI::BlockVector distributed_nse_solution(nse_rhs);
         distributed_nse_solution = nse_solution;
 
@@ -923,34 +905,66 @@ namespace ExtersiorCalculus
           if (nse_constraints.is_constrained(i))
             distributed_nse_solution(i) = 0;
 
-        // tmp of size block(0)
-        LA::MPI::Vector tmp(nse_partitioning[0], this->mpi_communicator);
+        /*
+         * Initialize the preconditioner of the mass matrix in H(curl).
+         */
+        Mw_schur_preconditioner = std::make_shared<
+          typename LinearAlgebra::InnerSchurPreconditioner::type>();
+        // Fill preconditioner with life
+        Mw_schur_preconditioner->initialize(nse_matrix.block(0, 0), data);
 
-        // Set up Schur complement
-        LinearAlgebra::SchurComplement<
+        const LinearAlgebra::InverseMatrix<
+          LA::SparseMatrix,
+          typename LinearAlgebra::InnerSchurPreconditioner::type>
+          Mw_inverse(nse_matrix.block(0, 0),
+                     *Mw_schur_preconditioner,
+                     /* use_simple_cg */ true);
+
+        /*
+         * Set up shifted Schur complement w.r.t. Mw, i.e.,
+         * Sw = Mu - Ru*Mw_inverse*Rw
+         */
+        LinearAlgebra::ShiftedSchurComplement<
           LA::BlockSparseMatrix,
           LA::MPI::Vector,
           typename LinearAlgebra::InnerSchurPreconditioner::type>
-          schur_complement(nse_matrix,
-                           block_inverse,
-                           nse_partitioning,
-                           this->mpi_communicator);
+          Mu_minus_Sw(nse_matrix,
+                      block_inverse,
+                      nse_partitioning,
+                      this->mpi_communicator);
 
-        // Compute schur_rhs = -g + C*A^{-1}*f
-        LA::MPI::Vector schur_rhs(nse_partitioning[1], this->mpi_communicator);
+        using PreconType = LA::PreconditionIdentity;
+        PreconType precondition_identity;
+        LinearAlgebra::InverseMatrix<
+          LinearAlgebra::ShiftedSchurComplement<
+            LA::BlockSparseMatrix,
+            LA::MPI::Vector,
+            typename LinearAlgebra::InnerSchurPreconditioner::type>,
+          PreconType>
+          Mu_minus_Sw_inverse(Mu_minus_Sw,
+                              precondition_identity,
+                              /* use_simple_cg */ false);
+
+        // tmp of size block(1)
+        LA::MPI::Vector tmp_1(nse_partitioning[1], this->mpi_communicator);
+
+        // Compute schur_rhs = B*Mu_minus_Sw_inverse*f
+        LA::MPI::Vector schur_rhs(nse_partitioning[2], this->mpi_communicator);
 
         this->pcout
           << std::endl
-          << "      Apply inverse of block (0,0) for Schur complement solver RHS..."
+          << "      Apply nested inverse Schur complement solver RHS..."
           << std::endl;
 
-        block_inverse.vmult(tmp, nse_rhs.block(0));
-        nse_matrix.block(1, 0).vmult(schur_rhs, tmp);
-        schur_rhs -= nse_rhs.block(1);
 
-        this->pcout << "      Schur complement solver RHS computation done..."
-                    << std::endl
-                    << std::endl;
+
+        Mu_minus_Sw_inverse.vmult(tmp_1, nse_rhs.block(0));
+        nse_matrix.block(2, 1).vmult(schur_rhs, tmp_1);
+
+        this->pcout
+          << "      Nested Schur complement solver RHS computation done..."
+          << std::endl
+          << std::endl;
 
         {
           TimerOutput::Scope t(
@@ -959,42 +973,28 @@ namespace ExtersiorCalculus
 
           this->pcout << "      Apply Schur complement solver..." << std::endl;
 
-          // Set Solver parameters for solving for u
+          /*
+           * Build nested Schur complement
+           */
+          LinearAlgebra::NestedSchurComplement<LA::BlockSparseMatrix,
+                                               LA::MPI::Vector,
+                                               PreconType>
+            nested_schur_Mu_minus_Sw(nse_matrix,
+                                     Mu_minus_Sw_inverse,
+                                     nse_partitioning,
+                                     this->mpi_communicator);
+
+          // Set Solver parameters for solving for p
           SolverControl                solver_control(nse_matrix.m(),
                                        1e-6 * schur_rhs.l2_norm());
           SolverGMRES<LA::MPI::Vector> schur_solver(solver_control);
 
-          /*
-           * Precondition the Schur complement with
-           * the approximate inverse of an approximate
-           * Schur complement.
-           */
-          LinearAlgebra::ApproximateSchurComplement<LA::BlockSparseMatrix,
-                                                    LA::MPI::Vector,
-                                                    LA::PreconditionILU>
-            approx_schur(nse_matrix, nse_partitioning, this->mpi_communicator);
 
-          using PreconType = LA::PreconditionIdentity;
-          PreconType precondition_identity;
-          LinearAlgebra::ApproximateInverseMatrix<
-            LinearAlgebra::ApproximateSchurComplement<LA::BlockSparseMatrix,
-                                                      LA::MPI::Vector,
-                                                      LA::PreconditionILU>,
-            PreconType>
-            preconditioner_for_schur_solver(approx_schur,
-                                            precondition_identity,
-#ifdef DEBUG
-                                            /* n_iter */ 2500);
-#else
-                                            /* n_iter */ 40);
-#endif
 
-          schur_solver.solve(
-            schur_complement,
-            distributed_nse_solution.block(1),
-            schur_rhs,
-            //                               						   precondition_identity);
-            preconditioner_for_schur_solver);
+          schur_solver.solve(nested_schur_Mu_minus_Sw,
+                             distributed_nse_solution.block(2),
+                             schur_rhs,
+                             precondition_identity);
 
           this->pcout << "      Iterative Schur complement solver converged in "
                       << solver_control.last_step() << " iterations."
@@ -1003,6 +1003,14 @@ namespace ExtersiorCalculus
 
           nse_constraints.distribute(distributed_nse_solution);
         } // solve for pressure
+
+
+
+        /*
+         * TODO
+         */
+
+
 
         {
           TimerOutput::Scope t(
