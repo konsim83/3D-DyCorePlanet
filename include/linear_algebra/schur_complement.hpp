@@ -25,7 +25,7 @@ namespace LinearAlgebra
    *	\left(
    *	\begin{array}{cc}
    *		A & B^T \\
-   *		B & C
+   *		B & 0
    *	\end{array}
    *	\right)
    *	\left(
@@ -37,13 +37,13 @@ namespace LinearAlgebra
    *	=
    *	\left(
    *	\begin{array}{c}
-   *		0 \\
-   *		u
+   *		f \\
+   *		0
    *	\end{array}
    *	\right)
    * \f}
    * and know that \f$A\f$ is invertible then we first define the inverse and
-   *define the Schur complement as \f{eqnarray}{ \tilde S = C - BP_A^{-1}B^T \f}
+   *define the Schur complement as \f{eqnarray}{ \tilde S = BP_A^{-1}B^T \f}
    *to solve for \f$u\f$. The inverse must be separately given to the class as
    *an input argument.
    */
@@ -84,9 +84,14 @@ namespace LinearAlgebra
 
   private:
     /*!
-     * Smart pointer to system matrix.
+     * Smart pointer to system matrix block 01.
      */
-    const SmartPointer<const BlockMatrixType> system_matrix;
+    const SmartPointer<const BlockType> block_01;
+
+    /*!
+     * Smart pointer to system matrix block 10.
+     */
+    const SmartPointer<const BlockType> block_10;
 
     /*!
      * Smart pointer to inverse upper left block of the system matrix.
@@ -125,7 +130,8 @@ namespace LinearAlgebra
                       &                          relevant_inverse_matrix,
                     const std::vector<IndexSet> &owned_partitioning,
                     MPI_Comm                     mpi_communicator)
-    : system_matrix(&system_matrix)
+    : block_01(&(system_matrix.block(0, 1)))
+    , block_10(&(system_matrix.block(1, 0)))
     , relevant_inverse_matrix(&relevant_inverse_matrix)
     , owned_partitioning(owned_partitioning)
     , mpi_communicator(mpi_communicator)
@@ -141,9 +147,9 @@ namespace LinearAlgebra
     VectorType &      dst,
     const VectorType &src) const
   {
-    system_matrix->block(0, 1).vmult(tmp1, src);
+    block_01->vmult(tmp1, src);
     relevant_inverse_matrix->vmult(tmp2, tmp1);
-    system_matrix->block(1, 0).vmult(dst, tmp2);
+    block_10->vmult(dst, tmp2);
   }
 } // end namespace LinearAlgebra
 
