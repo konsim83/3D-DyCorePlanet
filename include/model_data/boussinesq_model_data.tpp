@@ -31,7 +31,7 @@ namespace CoreModelData
 
       covariance_matrix = 0;
 
-      for (unsigned int d = 0; d < 3; ++d)
+      for (unsigned int d = 0; d < 2; ++d)
         {
           covariance_matrix[d][d] = 20 / ((R1 - R0) / 2);
         }
