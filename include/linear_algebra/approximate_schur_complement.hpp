@@ -25,7 +25,7 @@ namespace LinearAlgebra
    *	\left(
    *	\begin{array}{cc}
    *		A & B^T \\
-   *		B & C
+   *		B & 0
    *	\end{array}
    *	\right)
    *	\left(
@@ -37,14 +37,14 @@ namespace LinearAlgebra
    *	=
    *	\left(
    *	\begin{array}{c}
-   *		0 \\
-   *		u
+   *		f \\
+   *		0
    *	\end{array}
    *	\right)
    * \f}
    * and know that \f$A\f$ is invertible then we choose a preconditioner
    *\f$P_A\f$ and define the approximate Schur complement as \f{eqnarray}{
-   *\tilde S = C - BP_A^{-1}B^T \f} to solve for \f$u\f$.
+   *\tilde S = BP_A^{-1}B^T \f} to solve for \f$u\f$.
    */
   template <typename BlockMatrixType,
             typename VectorType,

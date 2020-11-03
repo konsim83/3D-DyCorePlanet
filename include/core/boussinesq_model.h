@@ -292,9 +292,10 @@ namespace Standard
 
     class Postprocessor;
 
-    std::shared_ptr<typename LinearAlgebra::InnerSchurPreconditioner::type>
-                                                                           inner_schur_preconditioner;
-    typename LinearAlgebra::InnerSchurPreconditioner::type::AdditionalData data;
+    using InnerPreconditionerType =
+      typename LinearAlgebra::InnerSchurPreconditioner::type;
+    std::shared_ptr<InnerPreconditionerType>         inner_schur_preconditioner;
+    typename InnerPreconditionerType::AdditionalData data;
     bool is_initialized_inner_schur_preconditioner = false;
   };
 

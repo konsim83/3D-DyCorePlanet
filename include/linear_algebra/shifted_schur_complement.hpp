@@ -49,7 +49,7 @@ namespace LinearAlgebra
    */
   template <typename BlockMatrixType,
             typename VectorType,
-            typename PreconditionerType>
+            typename InverseMatrixType>
   class ShiftedSchurComplement : public Subscriptor
   {
   private:
@@ -67,9 +67,8 @@ namespace LinearAlgebra
      * @param owned_partitioning
      * @param mpi_communicator
      */
-    ShiftedSchurComplement(const BlockMatrixType &system_matrix,
-                           const InverseMatrix<BlockType, PreconditionerType>
-                             &                          relevant_inverse_matrix,
+    ShiftedSchurComplement(const BlockMatrixType &      system_matrix,
+                           const InverseMatrixType &    relevant_inverse_matrix,
                            const std::vector<IndexSet> &owned_partitioning,
                            MPI_Comm                     mpi_communicator);
 
@@ -101,8 +100,7 @@ namespace LinearAlgebra
     /*!
      * Smart pointer to inverse upper left block of the system matrix.
      */
-    const SmartPointer<const InverseMatrix<BlockType, PreconditionerType>>
-      relevant_inverse_matrix;
+    const SmartPointer<const InverseMatrixType> relevant_inverse_matrix;
 
     /*!
      * Index set to initialize tmp vectors using only locally owned partition.
@@ -128,11 +126,10 @@ namespace LinearAlgebra
 
   template <typename BlockMatrixType,
             typename VectorType,
-            typename PreconditionerType>
-  ShiftedSchurComplement<BlockMatrixType, VectorType, PreconditionerType>::
-    ShiftedSchurComplement(const BlockMatrixType &system_matrix,
-                           const InverseMatrix<BlockType, PreconditionerType>
-                             &                          relevant_inverse_matrix,
+            typename InverseMatrixType>
+  ShiftedSchurComplement<BlockMatrixType, VectorType, InverseMatrixType>::
+    ShiftedSchurComplement(const BlockMatrixType &      system_matrix,
+                           const InverseMatrixType &    relevant_inverse_matrix,
                            const std::vector<IndexSet> &owned_partitioning,
                            MPI_Comm                     mpi_communicator)
     : block_01(&(system_matrix.block(0, 1)))
@@ -148,10 +145,11 @@ namespace LinearAlgebra
 
   template <typename BlockMatrixType,
             typename VectorType,
-            typename PreconditionerType>
+            typename InverseMatrixType>
   void
-  ShiftedSchurComplement<BlockMatrixType, VectorType, PreconditionerType>::
-    vmult(VectorType &dst, const VectorType &src) const
+  ShiftedSchurComplement<BlockMatrixType, VectorType, InverseMatrixType>::vmult(
+    VectorType &      dst,
+    const VectorType &src) const
   {
     block_11->vmult(dst, src);
     block_01->vmult(tmp1, src);

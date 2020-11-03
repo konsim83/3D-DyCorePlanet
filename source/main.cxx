@@ -75,9 +75,8 @@ main(int argc, char *argv[])
         {
           if (parameters_boussinesq.use_FEEC_solver)
             {
-              DyCorePlanet::ExteriorCalculus::BoussinesqModel<2>
-                aqua_planet_boussinesq(parameters_boussinesq);
-              aqua_planet_boussinesq.run();
+              throw std::runtime_error(
+                "Boussinesq system for FEEC elements in 2D not implemented yet.");
             }
           else
             {

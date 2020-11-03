@@ -265,16 +265,21 @@ namespace ExteriorCalculus
 
     class Postprocessor;
 
-    std::shared_ptr<typename LinearAlgebra::InnerSchurPreconditioner::type>
-                                                                           Mw_schur_preconditioner;
-    typename LinearAlgebra::InnerSchurPreconditioner::type::AdditionalData data;
+    using InnerPreconditionerType =
+      typename LinearAlgebra::InnerSchurPreconditioner::type;
+    std::shared_ptr<InnerPreconditionerType>         Mw_schur_preconditioner;
+    typename InnerPreconditionerType::AdditionalData data;
     bool is_initialized_inner_schur_preconditioner = false;
   };
 
 } // namespace ExteriorCalculus
 
-// Extern template instantiations
-extern template class ExteriorCalculus::BoussinesqModel<2>;
+/*
+ * Extern template instantiations. Do not instantiate for dim=2 since the
+ * meaning of curls is different there. This needs template specialization that
+ * is not implemented yet..
+ */
+// extern template class ExteriorCalculus::BoussinesqModel<2>;
 extern template class ExteriorCalculus::BoussinesqModel<3>;
 
 DYCOREPLANET_CLOSE_NAMESPACE

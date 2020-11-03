@@ -215,13 +215,13 @@ namespace ExteriorCalculus
        * Lower boundary (id=0)
        */
       VectorTools::project_boundary_values_curl_conforming_l2(
-        dof_handler,
+        nse_dof_handler,
         /*first vector component */ 0,
         Functions::ZeroFunction<dim>(2 * dim + 1),
         /*boundary id*/ 0,
         nse_constraints);
       VectorTools::project_boundary_values_div_conforming(
-        dof_handler,
+        nse_dof_handler,
         /*first vector component */
         3,
         Functions::ZeroFunction<dim>(dim + 1),
@@ -232,13 +232,13 @@ namespace ExteriorCalculus
        * Upper boundary (id=1)
        */
       VectorTools::project_boundary_values_curl_conforming_l2(
-        dof_handler,
+        nse_dof_handler,
         /*first vector component */ 0,
         Functions::ZeroFunction<dim>(2 * dim + 1),
         /*boundary id*/ 1,
         nse_constraints);
       VectorTools::project_boundary_values_div_conforming(
-        dof_handler,
+        nse_dof_handler,
         /*first vector component */
         3,
         Functions::ZeroFunction<dim>(dim + 1),
@@ -271,7 +271,6 @@ namespace ExteriorCalculus
      * Setup the matrix and vector objects.
      */
     setup_nse_matrices(nse_partitioning, nse_relevant_partitioning);
-    setup_nse_preconditioner(nse_partitioning, nse_relevant_partitioning);
 
     setup_temperature_matrices(temperature_partitioning,
                                temperature_relevant_partitioning);
@@ -410,17 +409,28 @@ namespace ExteriorCalculus
                (scratch.div_phi_u[i] * 0.5 *
                   scalar_product(old_velocity, old_velocity) -
                 scratch.phi_u[i] *
-                  (dim == 2 ? old_vorticity * cross_product_2d(old_velocity) :
-                              cross_product_3d(
-                                old_vorticity,
-                                old_velocity))) // advection at previous time
+                  //                  (dim == 2 ? old_vorticity *
+                  //                  cross_product_2d(old_velocity) :
+                  //                              cross_product_3d(
+                  //                                old_vorticity,
+                  //                                old_velocity))) // advection
+                  //                                at previous time
+                  cross_product_3d(
+                    old_vorticity,
+                    old_velocity)) // advection at previous time  (only 3D)
              -
              parameters.time_step *
-               (dim == 2 ? -2 * parameters.physical_constants.omega *
-                             scratch.phi_u[i] * cross_product_2d(old_velocity) :
-                           2 * scratch.phi_u[i] *
-                             cross_product_3d(coriolis,
-                                              old_velocity)) // coriolis force)
+               //               (dim == 2 ? -2 *
+               //               parameters.physical_constants.omega *
+               //                             scratch.phi_u[i] *
+               //                             cross_product_2d(old_velocity) :
+               //                           2 * scratch.phi_u[i] *
+               //                             cross_product_3d(coriolis,
+               //                                              old_velocity)) //
+               //                                              coriolis force
+               2 * scratch.phi_u[i] *
+               cross_product_3d(coriolis,
+                                old_velocity) // coriolis force (only 3D)
              ) *
             scratch.nse_fe_values.JxW(q);
       }
@@ -908,42 +918,43 @@ namespace ExteriorCalculus
         /*
          * Initialize the preconditioner of the mass matrix in H(curl).
          */
-        Mw_schur_preconditioner = std::make_shared<
-          typename LinearAlgebra::InnerSchurPreconditioner::type>();
+        using Mw_InnerPerconditionerType =
+          typename LinearAlgebra::InnerSchurPreconditioner::type;
+        Mw_schur_preconditioner =
+          std::make_shared<Mw_InnerPerconditionerType>();
         // Fill preconditioner with life
         Mw_schur_preconditioner->initialize(nse_matrix.block(0, 0), data);
 
-        const LinearAlgebra::InverseMatrix<
-          LA::SparseMatrix,
-          typename LinearAlgebra::InnerSchurPreconditioner::type>
-          Mw_inverse(nse_matrix.block(0, 0),
-                     *Mw_schur_preconditioner,
-                     /* use_simple_cg */ true);
+        using Mw_InverseType =
+          LinearAlgebra::InverseMatrix<LA::SparseMatrix,
+                                       Mw_InnerPerconditionerType>;
+        const Mw_InverseType Mw_inverse(nse_matrix.block(0, 0),
+                                        *Mw_schur_preconditioner,
+                                        /* use_simple_cg */ true);
 
         /*
          * Set up shifted Schur complement w.r.t. Mw, i.e.,
          * Sw = Mu - Ru*Mw_inverse*Rw
          */
-        LinearAlgebra::ShiftedSchurComplement<
-          LA::BlockSparseMatrix,
-          LA::MPI::Vector,
-          typename LinearAlgebra::InnerSchurPreconditioner::type>
+        LinearAlgebra::ShiftedSchurComplement<LA::BlockSparseMatrix,
+                                              LA::MPI::Vector,
+                                              Mw_InverseType>
           Mu_minus_Sw(nse_matrix,
-                      block_inverse,
+                      Mw_inverse,
                       nse_partitioning,
                       this->mpi_communicator);
 
-        using PreconType = LA::PreconditionIdentity;
-        PreconType precondition_identity;
-        LinearAlgebra::InverseMatrix<
-          LinearAlgebra::ShiftedSchurComplement<
-            LA::BlockSparseMatrix,
-            LA::MPI::Vector,
-            typename LinearAlgebra::InnerSchurPreconditioner::type>,
-          PreconType>
-          Mu_minus_Sw_inverse(Mu_minus_Sw,
-                              precondition_identity,
-                              /* use_simple_cg */ false);
+        using Mu_minus_Sw_PreconditionerType = LA::PreconditionIdentity;
+        Mu_minus_Sw_PreconditionerType Mu_minus_Sw_preconditioner;
+
+        using Mu_minus_Sw_InverseType = LinearAlgebra::InverseMatrix<
+          LinearAlgebra::ShiftedSchurComplement<LA::BlockSparseMatrix,
+                                                LA::MPI::Vector,
+                                                Mw_InverseType>,
+          Mu_minus_Sw_PreconditionerType>;
+        Mu_minus_Sw_InverseType Mu_minus_Sw_inverse(Mu_minus_Sw,
+                                                    Mu_minus_Sw_preconditioner,
+                                                    /* use_simple_cg */ false);
 
         {
           TimerOutput::Scope t(
@@ -976,9 +987,12 @@ namespace ExteriorCalculus
           /*
            * Build nested Schur complement
            */
+          using NestedSchur_PreconditionerType = LA::PreconditionIdentity;
+          NestedSchur_PreconditionerType
+            nested_schur_Mu_minus_Sw_preconditioner;
           LinearAlgebra::NestedSchurComplement<LA::BlockSparseMatrix,
                                                LA::MPI::Vector,
-                                               PreconType>
+                                               Mu_minus_Sw_InverseType>
             nested_schur_Mu_minus_Sw(nse_matrix,
                                      Mu_minus_Sw_inverse,
                                      nse_partitioning,
@@ -992,7 +1006,7 @@ namespace ExteriorCalculus
           schur_solver.solve(nested_schur_Mu_minus_Sw,
                              distributed_nse_solution.block(2),
                              schur_rhs,
-                             precondition_identity);
+                             nested_schur_Mu_minus_Sw_preconditioner);
 
           this->pcout
             << "      Iterative nested Schur complement solver (for p) converged in "
@@ -1008,6 +1022,9 @@ namespace ExteriorCalculus
             "      Solve NSE system - outer Schur complement solver (for u)");
 
           this->pcout << "      Apply outer solver..." << std::endl;
+
+          // tmp of size block(1)
+          LA::MPI::Vector tmp_1(nse_partitioning[1], this->mpi_communicator);
 
           nse_matrix.block(1, 2).vmult(tmp_1,
                                        distributed_nse_solution.block(2));
@@ -1034,7 +1051,7 @@ namespace ExteriorCalculus
 
           nse_matrix.block(0, 1).vmult(tmp_0,
                                        distributed_nse_solution.block(1));
-          tmp_1 *= -1;
+          tmp_0 *= -1;
           Mw_inverse.vmult(distributed_nse_solution.block(0), tmp_0);
 
           this->pcout << "      Inner CG solver (for w) completed." << std::endl
@@ -1296,7 +1313,7 @@ namespace ExteriorCalculus
                 else
                   {
                     Assert(joint_fe.system_to_base_index(i).first.first == 2,
-                           s ExcInternalError());
+                           ExcInternalError());
                     Assert(joint_fe.system_to_base_index(i).second <
                              local_temperature_dof_indices.size(),
                            ExcInternalError());
@@ -1504,9 +1521,6 @@ namespace ExteriorCalculus
         if (timestep_number == 0)
           {
             assemble_nse_system(time_index);
-
-            if (!parameters.use_schur_complement_solver)
-              build_nse_preconditioner(time_index);
           }
         else if ((timestep_number > 0) &&
                  (timestep_number % parameters.NSE_solver_interval == 0))
@@ -1514,9 +1528,6 @@ namespace ExteriorCalculus
             recompute_time_step();
 
             assemble_nse_system(time_index);
-
-            if (!parameters.use_schur_complement_solver)
-              build_nse_preconditioner(time_index);
           }
 
         assemble_temperature_matrix(time_index);
@@ -1538,7 +1549,8 @@ namespace ExteriorCalculus
           }
         else
           {
-            solve_NSE_block_preconditioned();
+            throw std::runtime_error(
+              "Prconditioned block solver not implemented.");
           }
 
         solve_temperature();

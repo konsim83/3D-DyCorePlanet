@@ -49,7 +49,7 @@ namespace LinearAlgebra
    */
   template <typename BlockMatrixType,
             typename VectorType,
-            typename PreconditionerType>
+            typename InverseMatrixType>
   class SchurComplement : public Subscriptor
   {
   private:
@@ -67,9 +67,8 @@ namespace LinearAlgebra
      * @param owned_partitioning
      * @param mpi_communicator
      */
-    SchurComplement(const BlockMatrixType &system_matrix,
-                    const InverseMatrix<BlockType, PreconditionerType>
-                      &                          relevant_inverse_matrix,
+    SchurComplement(const BlockMatrixType &      system_matrix,
+                    const InverseMatrixType &    relevant_inverse_matrix,
                     const std::vector<IndexSet> &owned_partitioning,
                     MPI_Comm                     mpi_communicator);
 
@@ -96,8 +95,7 @@ namespace LinearAlgebra
     /*!
      * Smart pointer to inverse upper left block of the system matrix.
      */
-    const SmartPointer<const InverseMatrix<BlockType, PreconditionerType>>
-      relevant_inverse_matrix;
+    const SmartPointer<const InverseMatrixType> relevant_inverse_matrix;
 
     /*!
      * Index set to initialize tmp vectors using only locally owned partition.
@@ -123,11 +121,10 @@ namespace LinearAlgebra
 
   template <typename BlockMatrixType,
             typename VectorType,
-            typename PreconditionerType>
-  SchurComplement<BlockMatrixType, VectorType, PreconditionerType>::
-    SchurComplement(const BlockMatrixType &system_matrix,
-                    const InverseMatrix<BlockType, PreconditionerType>
-                      &                          relevant_inverse_matrix,
+            typename InverseMatrixType>
+  SchurComplement<BlockMatrixType, VectorType, InverseMatrixType>::
+    SchurComplement(const BlockMatrixType &      system_matrix,
+                    const InverseMatrixType &    relevant_inverse_matrix,
                     const std::vector<IndexSet> &owned_partitioning,
                     MPI_Comm                     mpi_communicator)
     : block_01(&(system_matrix.block(0, 1)))
@@ -141,9 +138,9 @@ namespace LinearAlgebra
 
   template <typename BlockMatrixType,
             typename VectorType,
-            typename PreconditionerType>
+            typename InverseMatrixType>
   void
-  SchurComplement<BlockMatrixType, VectorType, PreconditionerType>::vmult(
+  SchurComplement<BlockMatrixType, VectorType, InverseMatrixType>::vmult(
     VectorType &      dst,
     const VectorType &src) const
   {

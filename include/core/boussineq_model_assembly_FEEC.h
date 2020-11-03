@@ -215,21 +215,24 @@ namespace ExteriorCalculus
 } // namespace ExteriorCalculus
 
 /*
- * Extern template instantiations
+ * Extern template instantiations. Do not instantiate for dim=2 since the
+ * meaning of curls is different there. This needs template specialization that
+ * is not implemented yet..
  */
-extern template class ExteriorCalculus::Assembly::Scratch::NSESystem<2>;
-extern template class ExteriorCalculus::Assembly::Scratch::TemperatureMatrix<
-  2>;
-extern template class ExteriorCalculus::Assembly::Scratch::TemperatureRHS<2>;
-
-extern template class ExteriorCalculus::Assembly::CopyData::NSESystem<2>;
-extern template class ExteriorCalculus::Assembly::CopyData::TemperatureMatrix<
-  2>;
-extern template class ExteriorCalculus::Assembly::CopyData::TemperatureRHS<2>;
+// extern template class ExteriorCalculus::Assembly::Scratch::NSESystem<2>;
+// extern template class
+// ExteriorCalculus::Assembly::Scratch::TemperatureMatrix<2>; extern template
+// class ExteriorCalculus::Assembly::Scratch::TemperatureRHS<2>;
+//
+// extern template class ExteriorCalculus::Assembly::CopyData::NSESystem<2>;
+// extern template class
+// ExteriorCalculus::Assembly::CopyData::TemperatureMatrix<
+//  2>;
+// extern template class
+// ExteriorCalculus::Assembly::CopyData::TemperatureRHS<2>;
 
 extern template class ExteriorCalculus::Assembly::Scratch::NSESystem<3>;
-extern template class ExteriorCalculus::Assembly::Scratch::TemperatureMatrix<
-  3>;
+extern template class ExteriorCalculus::Assembly::Scratch::TemperatureMatrix<3>;
 extern template class ExteriorCalculus::Assembly::Scratch::TemperatureRHS<3>;
 
 extern template class ExteriorCalculus::Assembly::CopyData::NSESystem<3>;

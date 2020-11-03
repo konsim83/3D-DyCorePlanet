@@ -1142,16 +1142,17 @@ namespace Standard
         /*
          * Initialize the inner preconditioner.
          */
-        inner_schur_preconditioner = std::make_shared<
-          typename LinearAlgebra::InnerSchurPreconditioner::type>();
+        inner_schur_preconditioner =
+          std::make_shared<InnerPreconditionerType>();
 
         // Fill preconditioner with life
         inner_schur_preconditioner->initialize(nse_matrix.block(0, 0), data);
 
-        const LinearAlgebra::InverseMatrix<
-          LA::SparseMatrix,
-          typename LinearAlgebra::InnerSchurPreconditioner::type>
-          block_inverse(nse_matrix.block(0, 0), *inner_schur_preconditioner);
+        using BlockInverseType =
+          LinearAlgebra::InverseMatrix<LA::SparseMatrix,
+                                       InnerPreconditionerType>;
+        const BlockInverseType block_inverse(nse_matrix.block(0, 0),
+                                             *inner_schur_preconditioner);
 
         TrilinosWrappers::MPI::BlockVector distributed_nse_solution(nse_rhs);
         distributed_nse_solution = nse_solution;
@@ -1170,10 +1171,9 @@ namespace Standard
         LA::MPI::Vector tmp(nse_partitioning[0], this->mpi_communicator);
 
         // Set up Schur complement
-        LinearAlgebra::SchurComplement<
-          LA::BlockSparseMatrix,
-          LA::MPI::Vector,
-          typename LinearAlgebra::InnerSchurPreconditioner::type>
+        LinearAlgebra::SchurComplement<LA::BlockSparseMatrix,
+                                       LA::MPI::Vector,
+                                       BlockInverseType>
           schur_complement(nse_matrix,
                            block_inverse,
                            nse_partitioning,
@@ -1212,18 +1212,20 @@ namespace Standard
            * the approximate inverse of an approximate
            * Schur complement.
            */
-          LinearAlgebra::ApproximateSchurComplement<LA::BlockSparseMatrix,
-                                                    LA::MPI::Vector,
-                                                    LA::PreconditionILU>
-            approx_schur(nse_matrix, nse_partitioning, this->mpi_communicator);
-
-          using PreconType = LA::PreconditionIdentity;
-          PreconType precondition_identity;
-          LinearAlgebra::ApproximateInverseMatrix<
+          using ApproxSchurComplementType =
             LinearAlgebra::ApproximateSchurComplement<LA::BlockSparseMatrix,
                                                       LA::MPI::Vector,
-                                                      LA::PreconditionILU>,
-            PreconType>
+                                                      LA::PreconditionILU>;
+          ApproxSchurComplementType approx_schur(nse_matrix,
+                                                 nse_partitioning,
+                                                 this->mpi_communicator);
+
+          using ApproxSchurComplementPreconditionerType =
+            LA::PreconditionIdentity;
+          ApproxSchurComplementPreconditionerType precondition_identity;
+          LinearAlgebra::ApproximateInverseMatrix<
+            ApproxSchurComplementType,
+            ApproxSchurComplementPreconditionerType>
             preconditioner_for_schur_solver(approx_schur,
                                             precondition_identity,
 #ifdef DEBUG
@@ -1232,12 +1234,10 @@ namespace Standard
                                             /* n_iter */ 40);
 #endif
 
-          schur_solver.solve(
-            schur_complement,
-            distributed_nse_solution.block(1),
-            schur_rhs,
-            //                               						   precondition_identity);
-            preconditioner_for_schur_solver);
+          schur_solver.solve(schur_complement,
+                             distributed_nse_solution.block(1),
+                             schur_rhs,
+                             preconditioner_for_schur_solver);
 
           this->pcout << "      Iterative Schur complement solver converged in "
                       << solver_control.last_step() << " iterations."
@@ -1253,12 +1253,6 @@ namespace Standard
             "      Solve NSE system - outer CG solver (for u)");
 
           this->pcout << "      Apply outer solver..." << std::endl;
-
-          //	SolverControl                    outer_solver_control;
-          //	PETScWrappers::SparseDirectMUMPS
-          // outer_solver(outer_solver_control,
-          // this->mpi_communicator);
-          // outer_solver.set_symmetric_mode(true);
 
           // use computed u to solve for sigma
           nse_matrix.block(0, 1).vmult(tmp, distributed_nse_solution.block(1));
