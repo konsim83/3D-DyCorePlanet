@@ -36,8 +36,8 @@ namespace Standard
      * Rescale the original this->triangulation to the one scaled by the
      * reference length.
      */
-    GridTools::scale(1 / parameters.reference_quantities.length,
-                     this->triangulation);
+    //    GridTools::scale(1 / parameters.reference_quantities.length,
+    //                     this->triangulation);
   }
 
 
@@ -1223,15 +1223,21 @@ namespace Standard
           using ApproxSchurComplementPreconditionerType =
             LA::PreconditionIdentity;
           ApproxSchurComplementPreconditionerType precondition_identity;
+#ifdef DEBUG
           LinearAlgebra::ApproximateInverseMatrix<
             ApproxSchurComplementType,
             ApproxSchurComplementPreconditionerType>
             preconditioner_for_schur_solver(approx_schur,
                                             precondition_identity,
-#ifdef DEBUG
                                             /* n_iter */ 2500);
 #else
-                                            /* n_iter */ 40);
+          //          LA::PreconditionIdentity preconditioner_for_schur_solver;
+          LinearAlgebra::ApproximateInverseMatrix<
+            ApproxSchurComplementType,
+            ApproxSchurComplementPreconditionerType>
+            preconditioner_for_schur_solver(approx_schur,
+                                            precondition_identity,
+                                            /* n_iter */ 2500);
 #endif
 
           schur_solver.solve(schur_complement,
@@ -1604,6 +1610,11 @@ namespace Standard
                 << CoreModelData::get_rossby_number(
                      parameters.reference_quantities.length,
                      parameters.physical_constants.omega,
+                     parameters.reference_quantities.velocity)
+                << std::endl
+                << "Reference accelertion                :   "
+                << CoreModelData::get_reference_accelleration(
+                     parameters.reference_quantities.length,
                      parameters.reference_quantities.velocity)
                 << std::endl
                 << "Grashoff number                      :   "

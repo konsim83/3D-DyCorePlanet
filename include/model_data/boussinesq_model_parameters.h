@@ -43,6 +43,8 @@ namespace CoreModelData
 
     bool use_locally_conservative_discretization;
 
+    unsigned int solver_diagnostics_print_level;
+
     bool use_schur_complement_solver;
     bool use_direct_solver;
 

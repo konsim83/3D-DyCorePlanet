@@ -25,7 +25,8 @@ namespace CoreModelData
                       const double kinematic_viscosity);
 
   /*!
-   * Return the Peclet number of the flow.
+   * Return the Peclet number of the flow. This is the ratio af advective time
+   * scale to the diffusive time scale.
    */
   double
   get_peclet_number(const double velocity,
@@ -33,12 +34,20 @@ namespace CoreModelData
                     const double thermal_diffusivity);
 
   /*!
-   * Return the Rossby number of the flow.
+   * Return the Rossby number of the flow. This is the ratio of inertial to
+   * coriolis forces.
    */
   double
   get_rossby_number(const double length,
                     const double omega,
                     const double velocity);
+
+  /*!
+   * Reference acceleration. The inverse enters as a scaling factor to the
+   * right-hand side of the equation.
+   */
+  double
+  get_reference_accelleration(const double length, const double velocity);
 
   /*!
    * Return the Grashoff number of the flow.

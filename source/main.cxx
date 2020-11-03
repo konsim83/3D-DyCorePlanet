@@ -67,9 +67,9 @@ main(int argc, char *argv[])
 
   try
     {
-      dealii::deallog.depth_console(1);
-
       DyCorePlanet::CoreModelData::Parameters parameters_boussinesq(input_file);
+
+      dealii::deallog.depth_console(parameters_boussinesq.solver_diagnostics_print_level);
 
       if (parameters_boussinesq.space_dimension == 2)
         {

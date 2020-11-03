@@ -26,7 +26,15 @@ CoreModelData::get_rossby_number(const double length,
                                  const double omega,
                                  const double velocity)
 {
-  return length * omega / velocity;
+  return velocity / (length * omega);
+}
+
+
+double
+CoreModelData::get_reference_accelleration(const double length,
+                                 const double velocity)
+{
+  return velocity * velocity / length;
 }
 
 

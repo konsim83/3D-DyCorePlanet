@@ -9,7 +9,7 @@ subsection Boussinesq Model
 		set velocity = 0.1
 		
 		# Standard: 1e+4 [m]
-		set length = 1
+		set length = 0.1
 		
 		# Standard: 273.15 [K]
 		set temperature = 2
@@ -18,10 +18,10 @@ subsection Boussinesq Model
 		set temperature_change = 0.5
 	end
 
-	set space dimension = 3
+	set space dimension = 2
 
-	set final time = 50
-	set time step = 0.05
+	set final time = 1
+	set time step = 0.01
 
 	set nse theta = 0.5
 	set nse velocity degree = 2
@@ -34,22 +34,25 @@ subsection Boussinesq Model
 	# only valid for standard H1-L2 elements
 	set use locally conservative discretization = false
 	
-	set use schur complement solver = false
+	# This is only for debugging purposes
+	set solver diagnostics level = 1
+	
+	set use schur complement solver = true
 	set use direct solver = false
 	
 	# How many temperture steps should be done during one
 	# NSE step with a time step that is admissible under
 	# CFL constraints
-	set NSE solver interval = 2
+	set NSE solver interval = 1
 
 	set temperature theta = 0.5
 	set temperature degree = 2
 	
 	# Base name of outputfile
-  	set filename output = boussinesq
-  	
-  	# Name of outputfile without ending
-  	set dirname output = data-output
+	set filename output = boussinesq
+	
+	# Name of outputfile without ending
+	set dirname output = data-output
 end
 
 
@@ -63,16 +66,16 @@ subsection Physical Constants
 	# Planetary angular velocity
 	#
 	# Standard: 7.272205e-5 [1/s]
-  	set omega = 1
-  		
+	set omega = 0.5
+		
 	# Air density
 	#
 	# Standard: 1.29 [kg / m^3]
 	set density = 1
 
-	# Universal gas constant.
-	#
-	# Unit: [J/(mol*K)]
+    # Universal gas constant.
+    #
+    # Unit: [J/(mol*K)]
     # Standard: 8.31446261815324 
     set universal_gas_constant = 1
 
@@ -93,7 +96,7 @@ subsection Physical Constants
     #
     # Unit: [kg/(m*s)]
     # Standard: 1.82e-5
-    set dynamic_viscosity = 1e-2
+    set dynamic_viscosity = 1.0e-3
 
     # Specific heat capacity of air under constant pressure.
     #

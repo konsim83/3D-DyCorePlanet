@@ -14,6 +14,7 @@ CoreModelData::Parameters::Parameters(const std::string &parameter_filename)
   , nse_velocity_degree(2)
   , use_FEEC_solver(false)
   , use_locally_conservative_discretization(true)
+  , solver_diagnostics_print_level(1)
   , use_schur_complement_solver(true)
   , use_direct_solver(false)
   , NSE_solver_interval(1)
@@ -101,6 +102,11 @@ CoreModelData::Parameters::declare_parameters(ParameterHandler &prm)
       "that does not locally conserve mass (although it is "
       "globally conservative.");
 
+    prm.declare_entry("solver diagnostics level",
+                      "1",
+                      Patterns::Integer(0),
+                      "Output level for solver for debug purposes.");
+
     prm.declare_entry(
       "use schur complement solver",
       "false",
@@ -168,6 +174,8 @@ CoreModelData::Parameters::parse_parameters(ParameterHandler &prm)
     use_locally_conservative_discretization =
       prm.get_bool("use locally conservative discretization");
 
+    solver_diagnostics_print_level =
+      prm.get_integer("solver diagnostics level");
     use_schur_complement_solver = prm.get_bool("use schur complement solver");
     use_direct_solver           = prm.get_bool("use direct solver");
 

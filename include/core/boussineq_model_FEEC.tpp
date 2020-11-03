@@ -19,7 +19,7 @@ namespace ExteriorCalculus
              1,
              FE_RaviartThomas<dim>(parameters.nse_velocity_degree),
              1,
-             FE_Q<dim>(parameters.nse_velocity_degree - 1),
+             FE_Q<dim>(parameters.nse_velocity_degree),
              1)
     , nse_dof_handler(this->triangulation)
     , temperature_fe(parameters.temperature_degree)
@@ -137,11 +137,9 @@ namespace ExteriorCalculus
     nse_sub_blocks[2 * dim] = 2;
 
     nse_dof_handler.distribute_dofs(nse_fe);
-    if (parameters.use_schur_complement_solver)
-      {
-        DoFRenumbering::Cuthill_McKee(nse_dof_handler);
-        //  DoFRenumbering::boost::king_ordering(nse_dof_handler);
-      }
+
+    DoFRenumbering::Cuthill_McKee(nse_dof_handler);
+    //  DoFRenumbering::boost::king_ordering(nse_dof_handler);
 
     DoFRenumbering::component_wise(nse_dof_handler, nse_sub_blocks);
 
@@ -1431,6 +1429,11 @@ namespace ExteriorCalculus
                      parameters.physical_constants.omega,
                      parameters.reference_quantities.velocity)
                 << std::endl
+                << "Reference accelertion                :   "
+                << CoreModelData::get_reference_accelleration(
+                     parameters.reference_quantities.length,
+                     parameters.reference_quantities.velocity)
+                << std::endl
                 << "Grashoff number                      :   "
                 << CoreModelData::get_grashoff_number(
                      dim,
@@ -1550,7 +1553,7 @@ namespace ExteriorCalculus
         else
           {
             throw std::runtime_error(
-              "Prconditioned block solver not implemented.");
+              "Preconditioned block solver not implemented.");
           }
 
         solve_temperature();
