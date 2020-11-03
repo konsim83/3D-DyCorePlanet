@@ -3,7 +3,7 @@
 
 DYCOREPLANET_OPEN_NAMESPACE
 
-namespace ExtersiorCalculus
+namespace ExteriorCalculus
 {
   //////////////////////////////////////////////////////
   /// Standard Boussinesq model in H1-L2
@@ -1565,6 +1565,6 @@ namespace ExtersiorCalculus
     while (time_index <= parameters.final_time);
   }
 
-} // namespace ExtersiorCalculus
+} // namespace ExteriorCalculus
 
 DYCOREPLANET_CLOSE_NAMESPACE

@@ -41,7 +41,7 @@ namespace CoreModelData
 
     bool use_FEEC_solver;
 
-    bool         use_locally_conservative_discretization;
+    bool use_locally_conservative_discretization;
 
     bool use_schur_complement_solver;
     bool use_direct_solver;

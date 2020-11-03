@@ -69,10 +69,10 @@
 #include <linear_algebra/approximate_inverse.hpp>
 #include <linear_algebra/approximate_schur_complement.hpp>
 #include <linear_algebra/inverse_matrix.hpp>
-#include <linear_algebra/preconditioner.h>
 #include <linear_algebra/nested_schur_complement.hpp>
-#include <linear_algebra/shifted_schur_complement.hpp>
+#include <linear_algebra/preconditioner.h>
 #include <linear_algebra/schur_complement.hpp>
+#include <linear_algebra/shifted_schur_complement.hpp>
 #include <model_data/boussinesq_model_data.h>
 #include <model_data/boussinesq_model_parameters.h>
 #include <model_data/core_model_data.h>
@@ -80,7 +80,7 @@
 
 DYCOREPLANET_OPEN_NAMESPACE
 
-namespace ExtersiorCalculus
+namespace ExteriorCalculus
 {
   /*!
    * @class BoussinesqModel
@@ -271,10 +271,10 @@ namespace ExtersiorCalculus
     bool is_initialized_inner_schur_preconditioner = false;
   };
 
-} // namespace ExtersiorCalculus
+} // namespace ExteriorCalculus
 
 // Extern template instantiations
-extern template class ExtersiorCalculus::BoussinesqModel<2>;
-extern template class ExtersiorCalculus::BoussinesqModel<3>;
+extern template class ExteriorCalculus::BoussinesqModel<2>;
+extern template class ExteriorCalculus::BoussinesqModel<3>;
 
 DYCOREPLANET_CLOSE_NAMESPACE

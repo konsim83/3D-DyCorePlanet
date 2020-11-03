@@ -156,7 +156,7 @@ namespace LinearAlgebra
     block_11->vmult(dst, src);
     block_01->vmult(tmp1, src);
     relevant_inverse_matrix->vmult(tmp2, tmp1);
-    tmp2*=-1;
+    tmp2 *= -1;
     block_10->vmult_add(dst, tmp2);
   }
 } // end namespace LinearAlgebra

@@ -1,11 +1,10 @@
 #pragma once
 
+#include <base/config.h>
 #include <sys/stat.h>
 
 #include <stdexcept>
 #include <string>
-
-#include <base/config.h>
 
 DYCOREPLANET_OPEN_NAMESPACE
 
@@ -22,7 +21,7 @@ namespace Tools
    * @param dir_name
    */
   void
-    create_data_directory(std::string dir_name);
+  create_data_directory(std::string dir_name);
 
 } // namespace Tools
 

@@ -4,23 +4,21 @@
 
 DYCOREPLANET_OPEN_NAMESPACE
 
-// template instantiations
-template class Standard::Assembly::Scratch::NSEPreconditioner<2>;
+/*
+ * template instantiations
+ */
 template class Standard::Assembly::Scratch::NSESystem<2>;
 template class Standard::Assembly::Scratch::TemperatureMatrix<2>;
 template class Standard::Assembly::Scratch::TemperatureRHS<2>;
 
-template class Standard::Assembly::CopyData::NSEPreconditioner<2>;
 template class Standard::Assembly::CopyData::NSESystem<2>;
 template class Standard::Assembly::CopyData::TemperatureMatrix<2>;
 template class Standard::Assembly::CopyData::TemperatureRHS<2>;
 
-template class Standard::Assembly::Scratch::NSEPreconditioner<3>;
 template class Standard::Assembly::Scratch::NSESystem<3>;
 template class Standard::Assembly::Scratch::TemperatureMatrix<3>;
 template class Standard::Assembly::Scratch::TemperatureRHS<3>;
 
-template class Standard::Assembly::CopyData::NSEPreconditioner<3>;
 template class Standard::Assembly::CopyData::NSESystem<3>;
 template class Standard::Assembly::CopyData::TemperatureMatrix<3>;
 template class Standard::Assembly::CopyData::TemperatureRHS<3>;

@@ -54,7 +54,7 @@
 
 DYCOREPLANET_OPEN_NAMESPACE
 
-namespace ExtersiorCalculus
+namespace ExteriorCalculus
 {
   namespace Assembly
   {
@@ -212,35 +212,29 @@ namespace ExtersiorCalculus
 
     } // namespace CopyData
   }   // namespace Assembly
-} // namespace ExtersiorCalculus
+} // namespace ExteriorCalculus
 
-// Extern template instantiations
-extern template class ExtersiorCalculus::Assembly::Scratch::NSEPreconditioner<
+/*
+ * Extern template instantiations
+ */
+extern template class ExteriorCalculus::Assembly::Scratch::NSESystem<2>;
+extern template class ExteriorCalculus::Assembly::Scratch::TemperatureMatrix<
   2>;
-extern template class ExtersiorCalculus::Assembly::Scratch::NSESystem<2>;
-extern template class ExtersiorCalculus::Assembly::Scratch::TemperatureMatrix<
-  2>;
-extern template class ExtersiorCalculus::Assembly::Scratch::TemperatureRHS<2>;
+extern template class ExteriorCalculus::Assembly::Scratch::TemperatureRHS<2>;
 
-extern template class ExtersiorCalculus::Assembly::CopyData::NSEPreconditioner<
+extern template class ExteriorCalculus::Assembly::CopyData::NSESystem<2>;
+extern template class ExteriorCalculus::Assembly::CopyData::TemperatureMatrix<
   2>;
-extern template class ExtersiorCalculus::Assembly::CopyData::NSESystem<2>;
-extern template class ExtersiorCalculus::Assembly::CopyData::TemperatureMatrix<
-  2>;
-extern template class ExtersiorCalculus::Assembly::CopyData::TemperatureRHS<2>;
+extern template class ExteriorCalculus::Assembly::CopyData::TemperatureRHS<2>;
 
-extern template class ExtersiorCalculus::Assembly::Scratch::NSEPreconditioner<
+extern template class ExteriorCalculus::Assembly::Scratch::NSESystem<3>;
+extern template class ExteriorCalculus::Assembly::Scratch::TemperatureMatrix<
   3>;
-extern template class ExtersiorCalculus::Assembly::Scratch::NSESystem<3>;
-extern template class ExtersiorCalculus::Assembly::Scratch::TemperatureMatrix<
-  3>;
-extern template class ExtersiorCalculus::Assembly::Scratch::TemperatureRHS<3>;
+extern template class ExteriorCalculus::Assembly::Scratch::TemperatureRHS<3>;
 
-extern template class ExtersiorCalculus::Assembly::CopyData::NSEPreconditioner<
+extern template class ExteriorCalculus::Assembly::CopyData::NSESystem<3>;
+extern template class ExteriorCalculus::Assembly::CopyData::TemperatureMatrix<
   3>;
-extern template class ExtersiorCalculus::Assembly::CopyData::NSESystem<3>;
-extern template class ExtersiorCalculus::Assembly::CopyData::TemperatureMatrix<
-  3>;
-extern template class ExtersiorCalculus::Assembly::CopyData::TemperatureRHS<3>;
+extern template class ExteriorCalculus::Assembly::CopyData::TemperatureRHS<3>;
 
 DYCOREPLANET_CLOSE_NAMESPACE

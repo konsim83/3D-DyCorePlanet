@@ -5,7 +5,7 @@ DYCOREPLANET_OPEN_NAMESPACE
 namespace Tools
 {
   void
-    create_data_directory(std::string dir_name)
+  create_data_directory(std::string dir_name)
   {
     const int dir_err =
       mkdir(dir_name.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);

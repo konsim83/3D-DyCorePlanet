@@ -2,7 +2,7 @@
 
 DYCOREPLANET_OPEN_NAMESPACE
 
-namespace ExtersiorCalculus
+namespace ExteriorCalculus
 {
   namespace Assembly
   {
@@ -228,6 +228,6 @@ namespace ExtersiorCalculus
 
     } // namespace CopyData
   }   // namespace Assembly
-} // namespace ExtersiorCalculus
+} // namespace ExteriorCalculus
 
 DYCOREPLANET_CLOSE_NAMESPACE

@@ -25,6 +25,7 @@ set(AquaPlanet_Boussinesq_TARGET_LIB_SRC
 	model_data/core_model_data.cc
 	model_data/core_model_data.inst.cc	
 	core/boussinesq_model.inst.cc
+	core/boussinesq_model_FEEC.inst.cc
 	core/boussineq_model_assembly.inst.cc)
 
 print_all_args (
