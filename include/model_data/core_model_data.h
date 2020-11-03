@@ -33,6 +33,14 @@ namespace CoreModelData
                     const double thermal_diffusivity);
 
   /*!
+   * Return the Rossby number of the flow.
+   */
+  double
+  get_rossby_number(const double length,
+                    const double omega,
+                    const double velocity);
+
+  /*!
    * Return the Grashoff number of the flow.
    */
   double

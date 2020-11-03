@@ -639,7 +639,7 @@ namespace ExtersiorCalculus
     const unsigned int n_q_points =
       scratch.temperature_fe_values.n_quadrature_points;
 
-    const FEValuesExtractors::Vector velocities(0);
+    const FEValuesExtractors::Vector velocities(1);
 
     data.local_rhs     = 0;
     data.matrix_for_bc = 0;
@@ -788,7 +788,7 @@ namespace ExtersiorCalculus
     FEValues<dim> fe_values(mapping, nse_fe, quadrature_formula, update_values);
     std::vector<Tensor<1, dim>> velocity_values(n_q_points);
 
-    const FEValuesExtractors::Vector velocities(0);
+    const FEValuesExtractors::Vector velocities(1);
     double                           max_local_velocity = 0;
 
     for (const auto &cell : nse_dof_handler.active_cell_iterators())
@@ -945,33 +945,33 @@ namespace ExtersiorCalculus
                               precondition_identity,
                               /* use_simple_cg */ false);
 
-        // tmp of size block(1)
-        LA::MPI::Vector tmp_1(nse_partitioning[1], this->mpi_communicator);
-
-        // Compute schur_rhs = B*Mu_minus_Sw_inverse*f
-        LA::MPI::Vector schur_rhs(nse_partitioning[2], this->mpi_communicator);
-
-        this->pcout
-          << std::endl
-          << "      Apply nested inverse Schur complement solver RHS..."
-          << std::endl;
-
-
-
-        Mu_minus_Sw_inverse.vmult(tmp_1, nse_rhs.block(0));
-        nse_matrix.block(2, 1).vmult(schur_rhs, tmp_1);
-
-        this->pcout
-          << "      Nested Schur complement solver RHS computation done..."
-          << std::endl
-          << std::endl;
-
         {
           TimerOutput::Scope t(
             this->computing_timer,
             "      Solve NSE system - Schur complement solver (for pressure)");
 
-          this->pcout << "      Apply Schur complement solver..." << std::endl;
+          // tmp of size block(1)
+          LA::MPI::Vector tmp_1(nse_partitioning[1], this->mpi_communicator);
+
+          // Compute schur_rhs = B*Mu_minus_Sw_inverse*f
+          LA::MPI::Vector schur_rhs(nse_partitioning[2],
+                                    this->mpi_communicator);
+
+          this->pcout
+            << std::endl
+            << "      Prepare RHS for nested inverse Schur complement solver (for p)..."
+            << std::endl;
+
+          Mu_minus_Sw_inverse.vmult(tmp_1, nse_rhs.block(1));
+          nse_matrix.block(2, 1).vmult(schur_rhs, tmp_1);
+
+          this->pcout
+            << "      RHS computation for nested Schur complement solver (for p) done..."
+            << std::endl
+            << std::endl;
+
+          this->pcout << "      Apply Schur complement solver (for p)..."
+                      << std::endl;
 
           /*
            * Build nested Schur complement
@@ -989,65 +989,68 @@ namespace ExtersiorCalculus
                                        1e-6 * schur_rhs.l2_norm());
           SolverGMRES<LA::MPI::Vector> schur_solver(solver_control);
 
-
-
           schur_solver.solve(nested_schur_Mu_minus_Sw,
                              distributed_nse_solution.block(2),
                              schur_rhs,
                              precondition_identity);
 
-          this->pcout << "      Iterative Schur complement solver converged in "
-                      << solver_control.last_step() << " iterations."
-                      << std::endl
-                      << std::endl;
+          this->pcout
+            << "      Iterative nested Schur complement solver (for p) converged in "
+            << solver_control.last_step() << " iterations." << std::endl
+            << std::endl;
 
           nse_constraints.distribute(distributed_nse_solution);
         } // solve for pressure
 
+        {
+          TimerOutput::Scope t(
+            this->computing_timer,
+            "      Solve NSE system - outer Schur complement solver (for u)");
 
+          this->pcout << "      Apply outer solver..." << std::endl;
 
-        /*
-         * TODO
-         */
+          nse_matrix.block(1, 2).vmult(tmp_1,
+                                       distributed_nse_solution.block(2));
+          tmp_1 *= -1;
+          tmp_1 += nse_rhs.block(1);
 
+          // Solve for u
+          Mu_minus_Sw_inverse.vmult(distributed_nse_solution.block(1), tmp_1);
 
+          this->pcout << "      Schur complement solver (for u) completed."
+                      << std::endl
+                      << std::endl;
+        } // solve for u
 
         {
           TimerOutput::Scope t(
             this->computing_timer,
-            "      Solve NSE system - outer CG solver (for u)");
+            "      Solve NSE system - inner CG solver (for w)");
 
-          this->pcout << "      Apply outer solver..." << std::endl;
+          this->pcout << "      Apply inner CG solver (for w)..." << std::endl;
 
-          //	SolverControl                    outer_solver_control;
-          //	PETScWrappers::SparseDirectMUMPS
-          // outer_solver(outer_solver_control,
-          // this->mpi_communicator);
-          // outer_solver.set_symmetric_mode(true);
+          // tmp of size block(0)
+          LA::MPI::Vector tmp_0(nse_partitioning[0], this->mpi_communicator);
 
-          // use computed u to solve for sigma
-          nse_matrix.block(0, 1).vmult(tmp, distributed_nse_solution.block(1));
-          tmp *= -1;
-          tmp += nse_rhs.block(0);
+          nse_matrix.block(0, 1).vmult(tmp_0,
+                                       distributed_nse_solution.block(1));
+          tmp_1 *= -1;
+          Mw_inverse.vmult(distributed_nse_solution.block(0), tmp_0);
 
-          // Solve for velocity
-          block_inverse.vmult(distributed_nse_solution.block(0), tmp);
-
-          this->pcout << "      Outer solver completed." << std::endl
+          this->pcout << "      Inner CG solver (for w) completed." << std::endl
                       << std::endl;
+        } // solve for w
 
-          nse_constraints.distribute(distributed_nse_solution);
+        nse_constraints.distribute(distributed_nse_solution);
 
-          /*
-           * We solved only for a scaled pressure to
-           * keep the system symmetric. So retransform.
-           */
-          distributed_nse_solution.block(1) /= parameters.time_step;
+        /*
+         * We solved only for a scaled pressure to
+         * keep the system symmetric. So retransform.
+         */
+        distributed_nse_solution.block(2) /= parameters.time_step;
 
-          nse_solution = distributed_nse_solution;
-
-        } // solve for velocity
-      }   // solver time intervall constraint
+        nse_solution = distributed_nse_solution;
+      } // solver time intervall constraint
   }
 
 
@@ -1115,7 +1118,6 @@ namespace ExtersiorCalculus
   // Postprocessor
   /////////////////////////////////////////////////////////////
 
-
   template <int dim>
   BoussinesqModel<dim>::Postprocessor::Postprocessor(
     const unsigned int partition)
@@ -1128,10 +1130,15 @@ namespace ExtersiorCalculus
   std::vector<std::string>
   BoussinesqModel<dim>::Postprocessor::get_names() const
   {
-    std::vector<std::string> solution_names(dim, "velocity");
+    std::vector<std::string> solution_names(dim, "vorticity");
+    for (unsigned int d = dim; d < 2 * dim; ++d)
+      {
+        solution_names.emplace_back("velocity");
+      }
     solution_names.emplace_back("p");
     solution_names.emplace_back("T");
     solution_names.emplace_back("partition");
+
     return solution_names;
   }
 
@@ -1141,11 +1148,26 @@ namespace ExtersiorCalculus
   std::vector<DataComponentInterpretation::DataComponentInterpretation>
   BoussinesqModel<dim>::Postprocessor::get_data_component_interpretation() const
   {
+    // vorticity
     std::vector<DataComponentInterpretation::DataComponentInterpretation>
       interpretation(dim,
                      DataComponentInterpretation::component_is_part_of_vector);
+
+    // velocity
+    interpretation.push_back(
+      DataComponentInterpretation::component_is_part_of_vector);
+    interpretation.push_back(
+      DataComponentInterpretation::component_is_part_of_vector);
+    interpretation.push_back(
+      DataComponentInterpretation::component_is_part_of_vector);
+
+    // pressure
     interpretation.push_back(DataComponentInterpretation::component_is_scalar);
+
+    // temperature
     interpretation.push_back(DataComponentInterpretation::component_is_scalar);
+
+    // partition
     interpretation.push_back(DataComponentInterpretation::component_is_scalar);
 
     return interpretation;
@@ -1174,7 +1196,7 @@ namespace ExtersiorCalculus
            ExcInternalError());
     Assert(computed_quantities.size() == n_quadrature_points,
            ExcInternalError());
-    Assert(inputs.solution_values[0].size() == dim + 2, ExcInternalError());
+    Assert(inputs.solution_values[0].size() == 2 * dim + 2, ExcInternalError());
 
     /*
      * TODO: Rescale to physical quantities here.
@@ -1184,13 +1206,16 @@ namespace ExtersiorCalculus
         for (unsigned int d = 0; d < dim; ++d)
           computed_quantities[q](d) = inputs.solution_values[q](d);
 
-        const double pressure       = (inputs.solution_values[q](dim));
-        computed_quantities[q](dim) = pressure;
+        for (unsigned int d = dim; d < 2 * dim; ++d)
+          computed_quantities[q](d) = inputs.solution_values[q](d);
 
-        const double temperature        = inputs.solution_values[q](dim + 1);
-        computed_quantities[q](dim + 1) = temperature;
+        const double pressure = (inputs.solution_values[q](2 * dim + 1));
+        computed_quantities[q](2 * dim) = pressure;
 
-        computed_quantities[q](dim + 2) = partition;
+        const double temperature = inputs.solution_values[q](2 * dim + 2);
+        computed_quantities[q](2 * dim + 1) = temperature;
+
+        computed_quantities[q](2 * dim + 2) = partition;
       }
   }
 
@@ -1247,29 +1272,41 @@ namespace ExtersiorCalculus
             temperature_cell->get_dof_indices(local_temperature_dof_indices);
 
             for (unsigned int i = 0; i < joint_fe.dofs_per_cell; ++i)
-              if (joint_fe.system_to_base_index(i).first.first == 0)
-                {
-                  Assert(joint_fe.system_to_base_index(i).second <
-                           local_nse_dof_indices.size(),
-                         ExcInternalError());
+              {
+                if (joint_fe.system_to_base_index(i).first.first == 0)
+                  {
+                    Assert(joint_fe.system_to_base_index(i).second <
+                             local_nse_dof_indices.size(),
+                           ExcInternalError());
 
-                  joint_solution(local_joint_dof_indices[i]) = nse_solution(
-                    local_nse_dof_indices[joint_fe.system_to_base_index(i)
-                                            .second]);
-                }
-              else
-                {
-                  Assert(joint_fe.system_to_base_index(i).first.first == 1,
-                         ExcInternalError());
-                  Assert(joint_fe.system_to_base_index(i).second <
-                           local_temperature_dof_indices.size(),
-                         ExcInternalError());
+                    joint_solution(local_joint_dof_indices[i]) = nse_solution(
+                      local_nse_dof_indices[joint_fe.system_to_base_index(i)
+                                              .second]);
+                  }
+                if (joint_fe.system_to_base_index(i).first.first == 1)
+                  {
+                    Assert(joint_fe.system_to_base_index(i).second <
+                             local_nse_dof_indices.size(),
+                           ExcInternalError());
 
-                  joint_solution(local_joint_dof_indices[i]) =
-                    temperature_solution(
-                      local_temperature_dof_indices
-                        [joint_fe.system_to_base_index(i).second]);
-                }
+                    joint_solution(local_joint_dof_indices[i]) = nse_solution(
+                      local_nse_dof_indices[joint_fe.system_to_base_index(i)
+                                              .second]);
+                  }
+                else
+                  {
+                    Assert(joint_fe.system_to_base_index(i).first.first == 2,
+                           s ExcInternalError());
+                    Assert(joint_fe.system_to_base_index(i).second <
+                             local_temperature_dof_indices.size(),
+                           ExcInternalError());
+
+                    joint_solution(local_joint_dof_indices[i]) =
+                      temperature_solution(
+                        local_temperature_dof_indices
+                          [joint_fe.system_to_base_index(i).second]);
+                  }
+              }
           } // end if is_locally_owned()
     }       // end for ++joint_cell
 
@@ -1370,6 +1407,12 @@ namespace ExtersiorCalculus
                      parameters.reference_quantities.velocity,
                      parameters.reference_quantities.length,
                      parameters.physical_constants.thermal_diffusivity)
+                << std::endl
+                << "Rossby number                        :   "
+                << CoreModelData::get_rossby_number(
+                     parameters.reference_quantities.length,
+                     parameters.physical_constants.omega,
+                     parameters.reference_quantities.velocity)
                 << std::endl
                 << "Grashoff number                      :   "
                 << CoreModelData::get_grashoff_number(

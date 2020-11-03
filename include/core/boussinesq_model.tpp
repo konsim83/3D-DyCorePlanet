@@ -1606,6 +1606,12 @@ namespace Standard
                      parameters.reference_quantities.length,
                      parameters.physical_constants.thermal_diffusivity)
                 << std::endl
+                << "Rossby number                        :   "
+                << CoreModelData::get_rossby_number(
+                     parameters.reference_quantities.length,
+                     parameters.physical_constants.omega,
+                     parameters.reference_quantities.velocity)
+                << std::endl
                 << "Grashoff number                      :   "
                 << CoreModelData::get_grashoff_number(
                      dim,
