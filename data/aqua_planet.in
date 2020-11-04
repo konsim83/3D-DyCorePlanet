@@ -34,10 +34,16 @@ subsection Boussinesq Model
 	# only valid for standard H1-L2 elements
 	set use locally conservative discretization = false
 	
-	set use schur complement solver = false
+	# This is only for debugging purposes
+	set solver diagnostics level = 1
+	
+	set use schur complement solver = true
 	set use direct solver = false
 	
-	set NSE solver interval = 10
+	# How many temperture steps should be done during one
+	# NSE step with a time step that is admissible under
+	# CFL constraints
+	set NSE solver interval = 1
 
 	set temperature theta = 0.5
 	set temperature degree = 2
@@ -47,6 +53,11 @@ subsection Boussinesq Model
   	
   	# Name of outputfile without ending
   	set dirname output = data-output
+  	
+  	# Output some info on MPI processes
+	# (Each MPI process says hello. 
+	# Careful with many processes)
+	set hello from cluster = true
 end
 
 

@@ -55,6 +55,8 @@ namespace CoreModelData
 
     std::string filename_output;
     std::string dirname_output;
+
+    bool hello_from_cluster;
   };
 
 } // namespace CoreModelData

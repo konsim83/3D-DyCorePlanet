@@ -20,6 +20,7 @@ CoreModelData::Parameters::Parameters(const std::string &parameter_filename)
   , NSE_solver_interval(1)
   , temperature_theta(0.5)
   , temperature_degree(2)
+  , hello_from_cluster(false)
 {
   ParameterHandler prm;
   CoreModelData::Parameters::declare_parameters(prm);
@@ -144,6 +145,12 @@ CoreModelData::Parameters::declare_parameters(ParameterHandler &prm)
                       "data-output",
                       Patterns::FileName(),
                       "Name of output directory.");
+
+    prm.declare_entry(
+      "hello from cluster",
+      "false",
+      Patterns::Bool(),
+      "Output some (node) information of each MPI process (rank, node name, number of threads).");
   }
   prm.leave_subsection();
 }
@@ -186,6 +193,8 @@ CoreModelData::Parameters::parse_parameters(ParameterHandler &prm)
 
     filename_output = prm.get("filename output");
     dirname_output  = prm.get("dirname output");
+
+    hello_from_cluster = prm.get_bool("hello from cluster");
   }
   prm.leave_subsection();
 }

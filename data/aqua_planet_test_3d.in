@@ -1,12 +1,12 @@
 subsection Boussinesq Model
 
 	subsection Mesh parameters
-		set initial global refinement = 4
+		set initial global refinement = 3
 	end
 	
 	subsection Reference quantities
 		# Standard: 10 [m/s]
-		set velocity = 0.1
+		set velocity = 0.5
 		
 		# Standard: 1e+4 [m]
 		set length = 0.1
@@ -18,7 +18,7 @@ subsection Boussinesq Model
 		set temperature_change = 0.5
 	end
 
-	set space dimension = 2
+	set space dimension = 3
 
 	set final time = 1
 	set time step = 0.01
@@ -52,7 +52,7 @@ subsection Boussinesq Model
 	set filename output = boussinesq
 	
 	# Name of outputfile without ending
-	set dirname output = data-output-2d
+	set dirname output = data-output-3d
 	
 	# Output some info on MPI processes
 	# (Each MPI process says hello. 
@@ -71,7 +71,7 @@ subsection Physical Constants
 	# Planetary angular velocity
 	#
 	# Standard: 7.272205e-5 [1/s]
-	set omega = 0.5
+	set omega = 2
 		
 	# Air density
 	#

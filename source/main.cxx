@@ -63,13 +63,31 @@ main(int argc, char *argv[])
 
   dealii::Utilities::MPI::MPI_InitFinalize mpi_initialization(
     argc, argv, dealii::numbers::invalid_unsigned_int);
-  //		  argc, argv, 1);
 
   try
     {
       DyCorePlanet::CoreModelData::Parameters parameters_boussinesq(input_file);
 
-      dealii::deallog.depth_console(parameters_boussinesq.solver_diagnostics_print_level);
+      if (parameters_boussinesq.hello_from_cluster)
+        {
+          char processor_name[MPI_MAX_PROCESSOR_NAME];
+          int  name_len;
+          MPI_Get_processor_name(processor_name, &name_len);
+
+          std::string proc_name(processor_name, name_len);
+
+          std::cout << "Hello from   " << proc_name << "   Rank:   "
+                    << dealii::Utilities::MPI::this_mpi_process(MPI_COMM_WORLD)
+                    << "   out of   "
+                    << dealii::Utilities::MPI::n_mpi_processes(MPI_COMM_WORLD)
+                    << "   | cores = " << dealii::MultithreadInfo::n_cores()
+                    << "   | threads = " << dealii::MultithreadInfo::n_threads()
+                    << std::endl;
+        }
+
+
+      dealii::deallog.depth_console(
+        parameters_boussinesq.solver_diagnostics_print_level);
 
       if (parameters_boussinesq.space_dimension == 2)
         {
