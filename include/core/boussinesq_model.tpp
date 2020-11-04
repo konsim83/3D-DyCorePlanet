@@ -36,8 +36,14 @@ namespace Standard
      * Rescale the original this->triangulation to the one scaled by the
      * reference length.
      */
-    //    GridTools::scale(1 / parameters.reference_quantities.length,
-    //                     this->triangulation);
+    GridTools::scale(1 / parameters.reference_quantities.length,
+                     this->triangulation);
+    /*
+     * We must also rescale the domain parameters since this enters the data of
+     * other objects (initial conditions etc)
+     */
+    parameters.physical_constants.R0 /= parameters.reference_quantities.length;
+    parameters.physical_constants.R1 /= parameters.reference_quantities.length;
   }
 
 
@@ -204,7 +210,7 @@ namespace Standard
                 << this->triangulation.n_global_active_cells() << " (on "
                 << this->triangulation.n_levels() << " levels)" << std::endl
                 << "Number of degrees of freedom: " << n_u + n_p + n_T << " ("
-                << n_u << '+' << n_p << '+' << n_T << ')' << std::endl
+                << n_u << " + " << n_p << " + " << n_T << ")" << std::endl
                 << std::endl;
     this->pcout.get_stream().imbue(s);
 
@@ -1001,7 +1007,9 @@ namespace Standard
      */
     const double scaling = (dim == 3 ? 0.25 : 1.0);
     parameters.time_step = (scaling / (2.1 * dim * std::sqrt(1. * dim)) /
-                            (parameters.temperature_degree * get_cfl_number()));
+                            (std::max(parameters.temperature_degree,
+                                      parameters.nse_velocity_degree) *
+                             get_cfl_number()));
 
     const double maximal_velocity = get_maximal_velocity();
 
@@ -1038,6 +1046,11 @@ namespace Standard
 
         TrilinosWrappers::MPI::BlockVector distributed_nse_solution(nse_rhs);
         distributed_nse_solution = nse_solution;
+        /*
+         * We solved only for a scaled pressure to
+         * keep the system symmetric. So transform now and rescale later.
+         */
+        distributed_nse_solution.block(1) *= parameters.time_step;
 
         const unsigned int
           start = (distributed_nse_solution.block(0).size() +
@@ -1699,6 +1712,7 @@ namespace Standard
       {
         // No exception handling here.
       }
+
     output_results();
 
     double time_index = 0;

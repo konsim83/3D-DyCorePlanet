@@ -15,12 +15,16 @@ namespace ExteriorCalculus
                           parameters_.physical_constants.R1)
     , parameters(parameters_)
     , mapping(3)
-    , nse_fe(FE_Nedelec<dim>(parameters.nse_velocity_degree),
-             1,
-             FE_RaviartThomas<dim>(parameters.nse_velocity_degree),
-             1,
-             FE_Q<dim>(parameters.nse_velocity_degree),
-             1)
+    , nse_fe(
+        static_cast<const FiniteElement<dim> &>(FE_Nedelec<dim>(
+          std::max(static_cast<int>(parameters.nse_velocity_degree) - 1, 0))),
+        1,
+        static_cast<const FiniteElement<dim> &>(FE_RaviartThomas<dim>(
+          std::max(static_cast<int>(parameters.nse_velocity_degree) - 1, 0))),
+        1,
+        static_cast<const FiniteElement<dim> &>(FE_DGQ<dim>(
+          std::max(static_cast<int>(parameters.nse_velocity_degree) - 1, 0))),
+        1)
     , nse_dof_handler(this->triangulation)
     , temperature_fe(parameters.temperature_degree)
     , temperature_dof_handler(this->triangulation)
@@ -36,6 +40,12 @@ namespace ExteriorCalculus
      */
     GridTools::scale(1 / parameters.reference_quantities.length,
                      this->triangulation);
+    /*
+     * We must also rescale the domain parameters since this enters the data of
+     * other objects (initial conditions etc)
+     */
+    parameters.physical_constants.R0 /= parameters.reference_quantities.length;
+    parameters.physical_constants.R1 /= parameters.reference_quantities.length;
   }
 
 
@@ -62,7 +72,7 @@ namespace ExteriorCalculus
                                               nse_relevant_partitioning,
                                               this->mpi_communicator);
 
-    Table<2, DoFTools::Coupling> coupling(dim + 1, dim + 1);
+    Table<2, DoFTools::Coupling> coupling(2 * dim + 1, 2 * dim + 1);
     for (unsigned int c = 0; c < 2 * dim + 1; ++c)
       for (unsigned int d = 0; d < 2 * dim + 1; ++d)
         if (!((c == 2 * dim) && (d == 2 * dim)))
@@ -129,19 +139,16 @@ namespace ExteriorCalculus
     /*
      * Setup dof handlers for nse and temperature
      */
-    std::vector<unsigned int> nse_sub_blocks(2 * dim + 1, 0);
-    for (unsigned int d = dim; d < 2 * dim; ++d)
-      {
-        nse_sub_blocks[d] = 1;
-      }
-    nse_sub_blocks[2 * dim] = 2;
+    std::vector<unsigned int> nse_sub_blocks(3, 0);
+    nse_sub_blocks[1] = 1;
+    nse_sub_blocks[2] = 2;
 
     nse_dof_handler.distribute_dofs(nse_fe);
 
     DoFRenumbering::Cuthill_McKee(nse_dof_handler);
     //  DoFRenumbering::boost::king_ordering(nse_dof_handler);
 
-    DoFRenumbering::component_wise(nse_dof_handler, nse_sub_blocks);
+    DoFRenumbering::block_wise(nse_dof_handler);
 
     temperature_dof_handler.distribute_dofs(temperature_fe);
 
@@ -168,9 +175,9 @@ namespace ExteriorCalculus
     this->pcout << "Number of active cells: "
                 << this->triangulation.n_global_active_cells() << " (on "
                 << this->triangulation.n_levels() << " levels)" << std::endl
-                << "Number of degrees of freedom: " << n_u + n_p + n_T << " ("
-                << n_w << " + " << n_u << " + " << n_p << " + " << n_T << ")"
-                << std::endl
+                << "Number of degrees of freedom: " << n_w + n_u + n_p + n_T
+                << " (" << n_w << " + " << n_u << " + " << n_p << " + " << n_T
+                << ")" << std::endl
                 << std::endl;
     this->pcout.get_stream().imbue(s);
 
@@ -190,9 +197,10 @@ namespace ExteriorCalculus
 
       DoFTools::extract_locally_relevant_dofs(nse_dof_handler,
                                               nse_relevant_set);
-      nse_partitioning.push_back(nse_relevant_set.get_view(0, n_w));
-      nse_partitioning.push_back(nse_relevant_set.get_view(n_w, n_w + n_u));
-      nse_partitioning.push_back(
+      nse_relevant_partitioning.push_back(nse_relevant_set.get_view(0, n_w));
+      nse_relevant_partitioning.push_back(
+        nse_relevant_set.get_view(n_w, n_w + n_u));
+      nse_relevant_partitioning.push_back(
         nse_relevant_set.get_view(n_w + n_u, n_w + n_u + n_p));
       temperature_partitioning = temperature_dof_handler.locally_owned_dofs();
       DoFTools::extract_locally_relevant_dofs(
@@ -222,7 +230,7 @@ namespace ExteriorCalculus
         nse_dof_handler,
         /*first vector component */
         3,
-        Functions::ZeroFunction<dim>(dim + 1),
+        Functions::ZeroFunction<dim>(dim),
         /*boundary id*/ 0,
         nse_constraints);
 
@@ -239,7 +247,7 @@ namespace ExteriorCalculus
         nse_dof_handler,
         /*first vector component */
         3,
-        Functions::ZeroFunction<dim>(dim + 1),
+        Functions::ZeroFunction<dim>(dim),
         /*boundary id*/ 1,
         nse_constraints);
 
@@ -375,15 +383,18 @@ namespace ExteriorCalculus
         for (unsigned int i = 0; i < dofs_per_cell; ++i)
           for (unsigned int j = 0; j < dofs_per_cell; ++j)
             data.local_matrix(i, j) +=
-              (scratch.phi_w[i] * scratch.phi_w[j]        // mass_w term
-               - scratch.curl_phi_w[i] * scratch.phi_w[j] // rot_w term
-               + scratch.phi_u[i] * scratch.phi_u[j]      // mass_u term
+              (scratch.phi_w[i] * scratch.phi_w[j] // mass_w term block(0,0)
+               -
+               scratch.curl_phi_w[i] * scratch.phi_u[j] // rot_w term block(0,1)
+               + scratch.phi_u[i] * scratch.phi_u[j] // mass_u term block(1,1)
                + parameters.time_step *
                    (one_over_reynolds_number * scratch.phi_u[i] *
-                    scratch.curl_phi_w[j]) // 1/Re * v * curl(w)
+                    scratch.curl_phi_w[j]) // 1/Re * v * curl(w) block(1,0)
                - (scratch.div_phi_u[i] *
-                  scratch.phi_p[j]) // div(v)*p ---> scaled pressure dt*p
-               + (scratch.phi_p[i] * scratch.div_phi_u[j]) // q*div(u)
+                  scratch
+                    .phi_p[j]) // div(v)*p ---> scaled pressure dt*p  block(1,2)
+               +
+               (scratch.phi_p[i] * scratch.div_phi_u[j]) // q*div(u)  block(2,1)
                ) *
               scratch.nse_fe_values.JxW(q);
 
@@ -469,7 +480,7 @@ namespace ExteriorCalculus
 
     nse_rhs = 0;
 
-    const QGauss<dim> quadrature_formula(parameters.nse_velocity_degree + 1);
+    const QGauss<dim> quadrature_formula(parameters.nse_velocity_degree + 2);
     using CellFilter =
       FilteredIterator<typename DoFHandler<dim>::active_cell_iterator>;
 
@@ -790,7 +801,7 @@ namespace ExteriorCalculus
   BoussinesqModel<dim>::get_maximal_velocity() const
   {
     const QIterated<dim> quadrature_formula(QTrapez<1>(),
-                                            parameters.nse_velocity_degree);
+                                            parameters.nse_velocity_degree + 1);
     const unsigned int   n_q_points = quadrature_formula.size();
 
     FEValues<dim> fe_values(mapping, nse_fe, quadrature_formula, update_values);
@@ -821,7 +832,7 @@ namespace ExteriorCalculus
   BoussinesqModel<dim>::get_cfl_number() const
   {
     const QIterated<dim> quadrature_formula(QTrapez<1>(),
-                                            parameters.nse_velocity_degree);
+                                            parameters.nse_velocity_degree + 1);
     const unsigned int   n_q_points = quadrature_formula.size();
 
     FEValues<dim> fe_values(mapping, nse_fe, quadrature_formula, update_values);
@@ -860,7 +871,9 @@ namespace ExteriorCalculus
      */
     const double scaling = (dim == 3 ? 0.25 : 1.0);
     parameters.time_step = (scaling / (2.1 * dim * std::sqrt(1. * dim)) /
-                            (parameters.temperature_degree * get_cfl_number()));
+                            (std::max(parameters.temperature_degree,
+                                      parameters.nse_velocity_degree) *
+                             get_cfl_number()));
 
     const double maximal_velocity = get_maximal_velocity();
 
@@ -900,6 +913,11 @@ namespace ExteriorCalculus
          */
         TrilinosWrappers::MPI::BlockVector distributed_nse_solution(nse_rhs);
         distributed_nse_solution = nse_solution;
+        /*
+         * We solved only for a scaled pressure to
+         * keep the system symmetric. So transform now and rescale later.
+         */
+        distributed_nse_solution.block(1) *= parameters.time_step;
 
         const unsigned int
           start = (distributed_nse_solution.block(0).size() +
@@ -1049,7 +1067,6 @@ namespace ExteriorCalculus
 
           nse_matrix.block(0, 1).vmult(tmp_0,
                                        distributed_nse_solution.block(1));
-          tmp_0 *= -1;
           Mw_inverse.vmult(distributed_nse_solution.block(0), tmp_0);
 
           this->pcout << "      Inner CG solver (for w) completed." << std::endl
@@ -1101,7 +1118,7 @@ namespace ExteriorCalculus
                 << " CG iterations for temperature" << std::endl;
 
     /*
-     * Compute global max and min temerature. Needs MPI communication.
+     * Compute global max and min temperature. Needs MPI communication.
      */
     double temperature[2] = {std::numeric_limits<double>::max(),
                              -std::numeric_limits<double>::max()};
@@ -1224,10 +1241,10 @@ namespace ExteriorCalculus
         for (unsigned int d = dim; d < 2 * dim; ++d)
           computed_quantities[q](d) = inputs.solution_values[q](d);
 
-        const double pressure = (inputs.solution_values[q](2 * dim + 1));
+        const double pressure           = (inputs.solution_values[q](2 * dim));
         computed_quantities[q](2 * dim) = pressure;
 
-        const double temperature = inputs.solution_values[q](2 * dim + 2);
+        const double temperature = inputs.solution_values[q](2 * dim + 1);
         computed_quantities[q](2 * dim + 1) = temperature;
 
         computed_quantities[q](2 * dim + 2) = partition;
@@ -1298,19 +1315,9 @@ namespace ExteriorCalculus
                       local_nse_dof_indices[joint_fe.system_to_base_index(i)
                                               .second]);
                   }
-                if (joint_fe.system_to_base_index(i).first.first == 1)
-                  {
-                    Assert(joint_fe.system_to_base_index(i).second <
-                             local_nse_dof_indices.size(),
-                           ExcInternalError());
-
-                    joint_solution(local_joint_dof_indices[i]) = nse_solution(
-                      local_nse_dof_indices[joint_fe.system_to_base_index(i)
-                                              .second]);
-                  }
                 else
                   {
-                    Assert(joint_fe.system_to_base_index(i).first.first == 2,
+                    Assert(joint_fe.system_to_base_index(i).first.first == 1,
                            ExcInternalError());
                     Assert(joint_fe.system_to_base_index(i).second <
                              local_temperature_dof_indices.size(),
@@ -1512,6 +1519,7 @@ namespace ExteriorCalculus
       {
         // No exception handling here.
       }
+
     output_results();
 
     double time_index = 0;
