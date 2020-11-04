@@ -423,23 +423,27 @@ namespace Standard
 
     assemble_nse_preconditioner(time_index);
 
-    std::vector<std::vector<bool>> constant_modes;
+    Mp_preconditioner = std::make_shared<Block_11_PreconType>();
+    typename Block_11_PreconType::AdditionalData Mp_preconditioner_data;
+    Mp_preconditioner->initialize(nse_preconditioner_matrix.block(1, 1),
+                                  Mp_preconditioner_data);
+
+
+    std::vector<std::vector<bool>> constant_modes_velocity;
     FEValuesExtractors::Vector     velocity_components(0);
     DoFTools::extract_constant_modes(nse_dof_handler,
                                      nse_fe.component_mask(velocity_components),
-                                     constant_modes);
-    Mp_preconditioner =
-      std::make_shared<TrilinosWrappers::PreconditionJacobi>();
-    Amg_preconditioner = std::make_shared<TrilinosWrappers::PreconditionAMG>();
-
-    TrilinosWrappers::PreconditionAMG::AdditionalData Amg_data;
-    Amg_data.constant_modes        = constant_modes;
+                                     constant_modes_velocity);
+    Amg_preconditioner = std::make_shared<Block_00_PreconType>();
+    typename Block_00_PreconType::AdditionalData Amg_data;
+    /*
+     * This is relevant to AMG preconditioners
+     */
+    Amg_data.constant_modes        = constant_modes_velocity;
     Amg_data.elliptic              = true;
     Amg_data.higher_order_elements = true;
     Amg_data.smoother_sweeps       = 1;
     Amg_data.aggregation_threshold = 0.02;
-
-    Mp_preconditioner->initialize(nse_preconditioner_matrix.block(1, 1));
     Amg_preconditioner->initialize(nse_preconditioner_matrix.block(0, 0),
                                    Amg_data);
 
@@ -1060,9 +1064,8 @@ namespace Standard
 
         try
           {
-            const LinearAlgebra::BlockSchurPreconditioner<
-              TrilinosWrappers::PreconditionAMG,
-              TrilinosWrappers::PreconditionJacobi>
+            const LinearAlgebra::BlockSchurPreconditioner<Block_00_PreconType,
+                                                          Block_11_PreconType>
               preconditioner(nse_matrix,
                              nse_preconditioner_matrix,
                              *Mp_preconditioner,
@@ -1084,9 +1087,8 @@ namespace Standard
           }
         catch (SolverControl::NoConvergence &)
           {
-            const LinearAlgebra::BlockSchurPreconditioner<
-              TrilinosWrappers::PreconditionAMG,
-              TrilinosWrappers::PreconditionJacobi>
+            const LinearAlgebra::BlockSchurPreconditioner<Block_00_PreconType,
+                                                          Block_11_PreconType>
               preconditioner(nse_matrix,
                              nse_preconditioner_matrix,
                              *Mp_preconditioner,
@@ -1222,22 +1224,24 @@ namespace Standard
 
           using ApproxSchurComplementPreconditionerType =
             LA::PreconditionIdentity;
-          ApproxSchurComplementPreconditionerType precondition_identity;
+          ApproxSchurComplementPreconditionerType
+            approx_schur_comp_preconditioner;
 #ifdef DEBUG
           LinearAlgebra::ApproximateInverseMatrix<
             ApproxSchurComplementType,
             ApproxSchurComplementPreconditionerType>
-            preconditioner_for_schur_solver(approx_schur,
-                                            precondition_identity,
-                                            /* n_iter */ 2500);
+            preconditioner_for_schur_solver(
+              approx_schur,
+              approx_schur_comp_preconditioner,
+              /* n_iter */ numbers::invalid_unsigned_int);
 #else
-          //          LA::PreconditionIdentity preconditioner_for_schur_solver;
           LinearAlgebra::ApproximateInverseMatrix<
             ApproxSchurComplementType,
             ApproxSchurComplementPreconditionerType>
-            preconditioner_for_schur_solver(approx_schur,
-                                            precondition_identity,
-                                            /* n_iter */ 2500);
+            preconditioner_for_schur_solver(
+              approx_schur,
+              approx_schur_comp_preconditioner,
+              /* n_iter */ numbers::invalid_unsigned_int);
 #endif
 
           schur_solver.solve(schur_complement,
@@ -1527,7 +1531,7 @@ namespace Standard
 
     data_out.add_data_vector(locally_relevant_joint_solution, postprocessor);
 
-    data_out.build_patches();
+    data_out.build_patches(parameters.nse_velocity_degree);
 
     static int        out_index = 0;
     const std::string filename =
@@ -1757,7 +1761,7 @@ namespace Standard
             this->computing_timer.print_summary();
           }
 
-        time_index += parameters.time_step;
+        time_index += parameters.time_step / parameters.NSE_solver_interval;
         ++timestep_number;
 
         old_nse_solution         = nse_solution;

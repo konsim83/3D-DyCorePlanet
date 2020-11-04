@@ -1344,7 +1344,7 @@ namespace ExteriorCalculus
 
     data_out.add_data_vector(locally_relevant_joint_solution, postprocessor);
 
-    data_out.build_patches();
+    data_out.build_patches(parameters.nse_velocity_degree);
 
     static int        out_index = 0;
     const std::string filename =
@@ -1569,7 +1569,7 @@ namespace ExteriorCalculus
             this->computing_timer.print_summary();
           }
 
-        time_index += parameters.time_step;
+        time_index += parameters.time_step / parameters.NSE_solver_interval;
         ++timestep_number;
 
         old_nse_solution         = nse_solution;
