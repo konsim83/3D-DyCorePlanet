@@ -115,7 +115,7 @@ namespace LinearAlgebra
     /*!
      * Muatable types for temporary vectors.
      */
-    mutable VectorType tmp1, tmp2, tmp3;
+    mutable VectorType tmp1, tmp2;
   };
 
 
@@ -140,7 +140,6 @@ namespace LinearAlgebra
     , mpi_communicator(mpi_communicator)
     , tmp1(owned_partitioning[0], mpi_communicator)
     , tmp2(owned_partitioning[0], mpi_communicator)
-    , tmp3(owned_partitioning[1], mpi_communicator)
   {}
 
   template <typename BlockMatrixType,

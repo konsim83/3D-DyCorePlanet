@@ -65,11 +65,11 @@ namespace Standard
     const std::vector<IndexSet> &nse_relevant_partitioning)
   {
     nse_matrix.clear();
-    TrilinosWrappers::BlockSparsityPattern sp(nse_partitioning,
-                                              nse_partitioning,
-                                              nse_relevant_partitioning,
-                                              this->mpi_communicator);
-    Table<2, DoFTools::Coupling>           coupling(dim + 1, dim + 1);
+    LA::BlockSparsityPattern     sp(nse_partitioning,
+                                nse_partitioning,
+                                nse_relevant_partitioning,
+                                this->mpi_communicator);
+    Table<2, DoFTools::Coupling> coupling(dim + 1, dim + 1);
     for (unsigned int c = 0; c < dim + 1; ++c)
       for (unsigned int d = 0; d < dim + 1; ++d)
         if (!((c == dim) && (d == dim)))
@@ -105,10 +105,10 @@ namespace Standard
     Mp_preconditioner.reset();
 
     nse_preconditioner_matrix.clear();
-    TrilinosWrappers::BlockSparsityPattern sp(nse_partitioning,
-                                              nse_partitioning,
-                                              nse_relevant_partitioning,
-                                              this->mpi_communicator);
+    LA::BlockSparsityPattern sp(nse_partitioning,
+                                nse_partitioning,
+                                nse_relevant_partitioning,
+                                this->mpi_communicator);
 
     Table<2, DoFTools::Coupling> coupling(dim + 1, dim + 1);
     for (unsigned int c = 0; c < dim + 1; ++c)
@@ -143,10 +143,10 @@ namespace Standard
     temperature_stiffness_matrix.clear();
     temperature_matrix.clear();
 
-    TrilinosWrappers::SparsityPattern sp(temperature_partitioner,
-                                         temperature_partitioner,
-                                         temperature_relevant_partitioner,
-                                         this->mpi_communicator);
+    LA::SparsityPattern sp(temperature_partitioner,
+                           temperature_partitioner,
+                           temperature_relevant_partitioner,
+                           this->mpi_communicator);
     DoFTools::make_sparsity_pattern(temperature_dof_handler,
                                     sp,
                                     temperature_constraints,
@@ -544,10 +544,8 @@ namespace Standard
                + parameters.time_step *
                    (one_over_reynolds_number * 2 * scratch.grads_phi_u[i] *
                     scratch.grads_phi_u[j]) // eps(v):sigma(eps(u))
-               -
-               (scratch.div_phi_u[i] *
-                scratch
-                  .phi_p[j]) // div(v)*p ---> we solve for scaled pressure dt*p
+               - (scratch.div_phi_u[i] *
+                  scratch.phi_p[j]) // div(v)*p (solve for scaled pressure dt*p)
                - (scratch.phi_p[i] * scratch.div_phi_u[j]) // q*div(u)
                ) *
               scratch.nse_fe_values.JxW(q);
@@ -566,16 +564,19 @@ namespace Standard
         for (unsigned int i = 0; i < dofs_per_cell; ++i)
           data.local_rhs(i) +=
             (scratch.phi_u[i] * old_velocity +
-             parameters.time_step * density_scaling * gravity *
-               scratch.phi_u[i] -
-             parameters.time_step * scratch.phi_u[i] *
-               (old_velocity * old_velocity_grads) // advection at previous time
-             - (dim == 2 ? -parameters.time_step * 2 *
-                             parameters.physical_constants.omega *
-                             scratch.phi_u[i] * cross_product_2d(old_velocity) :
-                           parameters.time_step * 2 * scratch.phi_u[i] *
-                             cross_product_3d(coriolis,
-                                              old_velocity)) // coriolis force)
+             parameters.time_step * density_scaling * gravity * scratch.phi_u[i]
+             //             - parameters.time_step * scratch.phi_u[i] *
+             //               (old_velocity * old_velocity_grads) // advection
+             //               at previous time
+             //             - (dim == 2 ? -parameters.time_step * 2 *
+             //                             parameters.physical_constants.omega
+             //                             * scratch.phi_u[i] *
+             //                             cross_product_2d(old_velocity) :
+             //                           parameters.time_step * 2 *
+             //                           scratch.phi_u[i] *
+             //                             cross_product_3d(coriolis,
+             //                                              old_velocity)) //
+             //                                              coriolis force)
              ) *
             scratch.nse_fe_values.JxW(q);
       }
@@ -890,8 +891,7 @@ namespace Standard
 
     if (rebuild_temperature_preconditioner == true)
       {
-        T_preconditioner =
-          std::make_shared<TrilinosWrappers::PreconditionJacobi>();
+        T_preconditioner = std::make_shared<LA::PreconditionJacobi>();
         T_preconditioner->initialize(temperature_matrix);
 
         //      rebuild_temperature_preconditioner = false;
@@ -1044,7 +1044,7 @@ namespace Standard
           << "   Solving Navier-Stokes system for one time step with (block preconditioned solver)... "
           << std::flush;
 
-        TrilinosWrappers::MPI::BlockVector distributed_nse_solution(nse_rhs);
+        LA::MPI::BlockVector distributed_nse_solution(nse_rhs);
         distributed_nse_solution = nse_solution;
         /*
          * We solved only for a scaled pressure to
@@ -1062,8 +1062,8 @@ namespace Standard
           if (nse_constraints.is_constrained(i))
             distributed_nse_solution(i) = 0;
 
-        PrimitiveVectorMemory<TrilinosWrappers::MPI::BlockVector> mem;
-        unsigned int  n_iterations     = 0;
+        PrimitiveVectorMemory<LA::MPI::BlockVector> mem;
+        unsigned int                                n_iterations = 0;
         const double  solver_tolerance = 1e-8 * nse_rhs.l2_norm();
         SolverControl solver_control(30, solver_tolerance);
 
@@ -1085,11 +1085,10 @@ namespace Standard
                              *Amg_preconditioner,
                              false);
 
-            SolverFGMRES<TrilinosWrappers::MPI::BlockVector> solver(
+            SolverFGMRES<LA::MPI::BlockVector> solver(
               solver_control,
               mem,
-              SolverFGMRES<TrilinosWrappers::MPI::BlockVector>::AdditionalData(
-                30));
+              SolverFGMRES<LA::MPI::BlockVector>::AdditionalData(30));
 
             solver.solve(nse_matrix,
                          distributed_nse_solution,
@@ -1111,11 +1110,10 @@ namespace Standard
             SolverControl solver_control_refined(nse_matrix.m(),
                                                  solver_tolerance);
 
-            SolverFGMRES<TrilinosWrappers::MPI::BlockVector> solver(
+            SolverFGMRES<LA::MPI::BlockVector> solver(
               solver_control_refined,
               mem,
-              SolverFGMRES<TrilinosWrappers::MPI::BlockVector>::AdditionalData(
-                50));
+              SolverFGMRES<LA::MPI::BlockVector>::AdditionalData(50));
 
             solver.solve(nse_matrix,
                          distributed_nse_solution,
@@ -1169,8 +1167,14 @@ namespace Standard
         const BlockInverseType block_inverse(nse_matrix.block(0, 0),
                                              *inner_schur_preconditioner);
 
-        TrilinosWrappers::MPI::BlockVector distributed_nse_solution(nse_rhs);
+        LA::MPI::BlockVector distributed_nse_solution(nse_rhs);
         distributed_nse_solution = nse_solution;
+
+        /*
+         * We solved only for a scaled pressure to
+         * keep the system symmetric. So transform now and rescale later.
+         */
+        distributed_nse_solution.block(1) *= parameters.time_step;
 
         const unsigned int
           start = (distributed_nse_solution.block(0).size() +
@@ -1315,10 +1319,9 @@ namespace Standard
     SolverControl solver_control(temperature_matrix.m(),
                                  1e-12 * temperature_rhs.l2_norm());
 
-    SolverCG<TrilinosWrappers::MPI::Vector> cg(solver_control);
+    SolverCG<LA::MPI::Vector> cg(solver_control);
 
-    TrilinosWrappers::MPI::Vector distributed_temperature_solution(
-      temperature_rhs);
+    LA::MPI::Vector distributed_temperature_solution(temperature_rhs);
 
     distributed_temperature_solution = temperature_solution;
 
@@ -1472,7 +1475,7 @@ namespace Standard
              nse_dof_handler.n_dofs() + temperature_dof_handler.n_dofs(),
            ExcInternalError());
 
-    TrilinosWrappers::MPI::Vector joint_solution;
+    LA::MPI::Vector joint_solution;
 
     joint_solution.reinit(joint_dof_handler.locally_owned_dofs(),
                           this->mpi_communicator);
@@ -1531,7 +1534,7 @@ namespace Standard
     DoFTools::extract_locally_relevant_dofs(joint_dof_handler,
                                             locally_relevant_joint_dofs);
 
-    TrilinosWrappers::MPI::Vector locally_relevant_joint_solution;
+    LA::MPI::Vector locally_relevant_joint_solution;
     locally_relevant_joint_solution.reinit(locally_relevant_joint_dofs,
                                            this->mpi_communicator);
     locally_relevant_joint_solution = joint_solution;
@@ -1689,8 +1692,7 @@ namespace Standard
      */
     nse_solution = 0;
 
-    TrilinosWrappers::MPI::Vector solution_tmp(
-      temperature_dof_handler.locally_owned_dofs());
+    LA::MPI::Vector solution_tmp(temperature_dof_handler.locally_owned_dofs());
 
     VectorTools::project(
       temperature_dof_handler,
@@ -1732,7 +1734,7 @@ namespace Standard
         else if ((timestep_number > 0) &&
                  (timestep_number % parameters.NSE_solver_interval == 0))
           {
-            recompute_time_step();
+            //            recompute_time_step();
 
             assemble_nse_system(time_index);
 
