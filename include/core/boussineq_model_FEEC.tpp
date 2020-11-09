@@ -935,13 +935,19 @@ namespace ExteriorCalculus
          * We solved only for a scaled pressure to
          * keep the system symmetric. So transform now and rescale later.
          */
-        distributed_nse_solution.block(1) *= parameters.time_step;
+        distributed_nse_solution.block(2) *= parameters.time_step;
 
+        /*
+         * Set values at constrained local pressure dofs to zero in order not to
+         * bother the Schur complement solver with irrelevant values.
+         */
         const unsigned int
           start = (distributed_nse_solution.block(0).size() +
-                   distributed_nse_solution.block(1).local_range().first),
+                   distributed_nse_solution.block(1).size() +
+                   distributed_nse_solution.block(2).local_range().first),
           end   = (distributed_nse_solution.block(0).size() +
-                 distributed_nse_solution.block(1).local_range().second);
+                 distributed_nse_solution.block(1).size() +
+                 distributed_nse_solution.block(2).local_range().second);
 
         for (unsigned int i = start; i < end; ++i)
           if (nse_constraints.is_constrained(i))
@@ -951,14 +957,6 @@ namespace ExteriorCalculus
         unsigned int                                n_iterations = 0;
         const double  solver_tolerance = 1e-8 * nse_rhs.l2_norm();
         SolverControl solver_control(50000, solver_tolerance);
-
-        /*
-         * We have only the actual pressure but need
-         * to solve for a scaled pressure to keep the
-         * system symmetric. Hence for the initial guess
-         * we need to transform to the rescaled version.
-         */
-        distributed_nse_solution.block(1) *= parameters.time_step;
 
         //          try
         {
@@ -1011,7 +1009,7 @@ namespace ExteriorCalculus
          * We solved only for a scaled pressure to
          * keep the system symmetric. So retransform.
          */
-        distributed_nse_solution.block(1) /= parameters.time_step;
+        distributed_nse_solution.block(2) /= parameters.time_step;
 
         nse_solution = distributed_nse_solution;
 

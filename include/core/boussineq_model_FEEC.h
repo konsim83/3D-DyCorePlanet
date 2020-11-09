@@ -72,9 +72,9 @@
 #include <linear_algebra/inverse_matrix.hpp>
 #include <linear_algebra/nested_schur_complement.hpp>
 #include <linear_algebra/preconditioner.h>
+#include <linear_algebra/preconditioner_block_identity.h>
 #include <linear_algebra/schur_complement.hpp>
 #include <linear_algebra/shifted_schur_complement.hpp>
-#include <linear_algebra/preconditioner_block_identity.h>
 #include <model_data/boussinesq_model_data.h>
 #include <model_data/boussinesq_model_parameters.h>
 #include <model_data/core_model_data.h>
