@@ -14,7 +14,7 @@ namespace ExteriorCalculus
     : PlanetGeometry<dim>(parameters_.physical_constants.R0,
                           parameters_.physical_constants.R1)
     , parameters(parameters_)
-    , mapping(3)
+    , temperature_mapping(2)
     , nse_fe(
         static_cast<const FiniteElement<dim> &>(FE_Nedelec<dim>(
           std::max(static_cast<int>(parameters.nse_velocity_degree) - 1, 0))),
@@ -157,15 +157,10 @@ namespace ExteriorCalculus
     /*
      * Setup dof handlers for nse and temperature
      */
-    std::vector<unsigned int> nse_sub_blocks(3, 0);
-    nse_sub_blocks[1] = 1;
-    nse_sub_blocks[2] = 2;
-
     nse_dof_handler.distribute_dofs(nse_fe);
 
     DoFRenumbering::Cuthill_McKee(nse_dof_handler);
     //  DoFRenumbering::boost::king_ordering(nse_dof_handler);
-
     DoFRenumbering::block_wise(nse_dof_handler);
 
     temperature_dof_handler.distribute_dofs(temperature_fe);
@@ -174,9 +169,7 @@ namespace ExteriorCalculus
      * Count dofs
      */
     std::vector<types::global_dof_index> nse_dofs_per_block(3);
-    DoFTools::count_dofs_per_block(nse_dof_handler,
-                                   nse_dofs_per_block,
-                                   nse_sub_blocks);
+    DoFTools::count_dofs_per_block(nse_dof_handler, nse_dofs_per_block);
     const unsigned int n_w = nse_dofs_per_block[0], n_u = nse_dofs_per_block[1],
                        n_p = nse_dofs_per_block[2],
                        n_T = temperature_dof_handler.n_dofs();
@@ -521,7 +514,7 @@ namespace ExteriorCalculus
       Assembly::Scratch::NSESystem<dim>(parameters.time_step,
                                         time_index,
                                         nse_fe,
-                                        mapping,
+                                        temperature_mapping,
                                         quadrature_formula,
                                         (update_values |
                                          update_quadrature_points |
@@ -649,7 +642,7 @@ namespace ExteriorCalculus
       Assembly::Scratch::TemperatureMatrix<dim>(parameters.time_step,
                                                 time_index,
                                                 temperature_fe,
-                                                mapping,
+                                                temperature_mapping,
                                                 quadrature_formula),
       Assembly::CopyData::TemperatureMatrix<dim>(temperature_fe));
 
@@ -807,7 +800,7 @@ namespace ExteriorCalculus
                                              time_index,
                                              temperature_fe,
                                              nse_fe,
-                                             mapping,
+                                             temperature_mapping,
                                              quadrature_formula),
       Assembly::CopyData::TemperatureRHS<dim>(temperature_fe));
 
@@ -825,7 +818,7 @@ namespace ExteriorCalculus
                                             parameters.nse_velocity_degree + 1);
     const unsigned int   n_q_points = quadrature_formula.size();
 
-    FEValues<dim> fe_values(mapping, nse_fe, quadrature_formula, update_values);
+    FEValues<dim> fe_values(nse_fe, quadrature_formula, update_values);
     std::vector<Tensor<1, dim>> velocity_values(n_q_points);
 
     const FEValuesExtractors::Vector velocities(1);
@@ -856,7 +849,7 @@ namespace ExteriorCalculus
                                             parameters.nse_velocity_degree + 1);
     const unsigned int   n_q_points = quadrature_formula.size();
 
-    FEValues<dim> fe_values(mapping, nse_fe, quadrature_formula, update_values);
+    FEValues<dim> fe_values(nse_fe, quadrature_formula, update_values);
     std::vector<Tensor<1, dim>> velocity_values(n_q_points);
 
     const FEValuesExtractors::Vector velocities(0);
@@ -1441,6 +1434,9 @@ namespace ExteriorCalculus
 
             for (unsigned int i = 0; i < joint_fe.dofs_per_cell; ++i)
               {
+                /*
+                 * A vorticity/velocity/pressure dof
+                 */
                 if (joint_fe.system_to_base_index(i).first.first == 0)
                   {
                     Assert(joint_fe.system_to_base_index(i).second <
@@ -1451,6 +1447,9 @@ namespace ExteriorCalculus
                       local_nse_dof_indices[joint_fe.system_to_base_index(i)
                                               .second]);
                   }
+                /*
+                 * A temperature dof
+                 */
                 else
                   {
                     Assert(joint_fe.system_to_base_index(i).first.first == 1,

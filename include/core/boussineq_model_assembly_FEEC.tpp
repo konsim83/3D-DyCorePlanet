@@ -16,16 +16,16 @@ namespace ExteriorCalculus
       NSESystem<dim>::NSESystem(const double              time_step,
                                 const double              time_index,
                                 const FiniteElement<dim> &nse_fe,
-                                const Mapping<dim> &      mapping,
+                                const Mapping<dim> &      temperature_mapping,
                                 const Quadrature<dim> &   nse_quadrature,
                                 const UpdateFlags         nse_update_flags,
                                 const FiniteElement<dim> &temperature_fe,
                                 const UpdateFlags temperature_update_flags)
-        : temperature_fe_values(mapping,
+        : temperature_fe_values(temperature_mapping,
                                 temperature_fe,
                                 nse_quadrature,
                                 temperature_update_flags)
-        , nse_fe_values(mapping, nse_fe, nse_quadrature, nse_update_flags)
+        , nse_fe_values(nse_fe, nse_quadrature, nse_update_flags)
         , phi_w(nse_fe.dofs_per_cell)
         , curl_phi_w(nse_fe.dofs_per_cell)
         , phi_u(nse_fe.dofs_per_cell)
@@ -46,8 +46,7 @@ namespace ExteriorCalculus
             scratch.temperature_fe_values.get_fe(),
             scratch.temperature_fe_values.get_quadrature(),
             scratch.temperature_fe_values.get_update_flags())
-        , nse_fe_values(scratch.nse_fe_values.get_mapping(),
-                        scratch.nse_fe_values.get_fe(),
+        , nse_fe_values(scratch.nse_fe_values.get_fe(),
                         scratch.nse_fe_values.get_quadrature(),
                         scratch.nse_fe_values.get_update_flags())
         , phi_w(scratch.phi_w)
@@ -72,9 +71,9 @@ namespace ExteriorCalculus
         const double              time_step,
         const double              time_index,
         const FiniteElement<dim> &temperature_fe,
-        const Mapping<dim> &      mapping,
+        const Mapping<dim> &      temperature_mapping,
         const Quadrature<dim> &   temperature_quadrature)
-        : temperature_fe_values(mapping,
+        : temperature_fe_values(temperature_mapping,
                                 temperature_fe,
                                 temperature_quadrature,
                                 update_values | update_gradients |
@@ -111,18 +110,15 @@ namespace ExteriorCalculus
         const double              time_index,
         const FiniteElement<dim> &temperature_fe,
         const FiniteElement<dim> &nse_fe,
-        const Mapping<dim> &      mapping,
+        const Mapping<dim> &      temperature_mapping,
         const Quadrature<dim> &   quadrature)
-        : temperature_fe_values(mapping,
+        : temperature_fe_values(temperature_mapping,
                                 temperature_fe,
                                 quadrature,
                                 update_values | update_gradients |
                                   update_hessians | update_quadrature_points |
                                   update_JxW_values)
-        , nse_fe_values(mapping,
-                        nse_fe,
-                        quadrature,
-                        update_values | update_gradients)
+        , nse_fe_values(nse_fe, quadrature, update_values | update_gradients)
         , phi_T(temperature_fe.dofs_per_cell)
         , grad_phi_T(temperature_fe.dofs_per_cell)
         , old_velocity_values(quadrature.size())
@@ -140,8 +136,7 @@ namespace ExteriorCalculus
             scratch.temperature_fe_values.get_fe(),
             scratch.temperature_fe_values.get_quadrature(),
             scratch.temperature_fe_values.get_update_flags())
-        , nse_fe_values(scratch.nse_fe_values.get_mapping(),
-                        scratch.nse_fe_values.get_fe(),
+        , nse_fe_values(scratch.nse_fe_values.get_fe(),
                         scratch.nse_fe_values.get_quadrature(),
                         scratch.nse_fe_values.get_update_flags())
         , phi_T(scratch.phi_T)

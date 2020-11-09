@@ -200,7 +200,7 @@ namespace ExteriorCalculus
      */
     CoreModelData::Parameters &parameters;
 
-    const MappingQ<dim> mapping;
+    const MappingQ<dim> temperature_mapping;
 
     const FESystem<dim>       nse_fe;
     DoFHandler<dim>           nse_dof_handler;
