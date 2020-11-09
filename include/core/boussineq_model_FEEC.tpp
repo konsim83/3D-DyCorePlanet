@@ -234,7 +234,7 @@ namespace ExteriorCalculus
       VectorTools::project_boundary_values_curl_conforming_l2(
         nse_dof_handler,
         /*first vector component */ 0,
-        Functions::ZeroFunction<dim>(dim),
+        Functions::ZeroFunction<dim>(2 * dim + 1),
         /*boundary id*/ 0,
         nse_constraints);
 
@@ -252,7 +252,7 @@ namespace ExteriorCalculus
       VectorTools::project_boundary_values_curl_conforming_l2(
         nse_dof_handler,
         /*first vector component */ 0,
-        ConstantFunction<dim>(1, dim),
+        Functions::ZeroFunction<dim>(2 * dim + 1),
         /*boundary id*/ 1,
         nse_constraints);
 
@@ -261,6 +261,7 @@ namespace ExteriorCalculus
         /*first vector component */
         3,
         Functions::ZeroFunction<dim>(dim),
+        //        ConstantFunction<dim>(1500, dim),
         /*boundary id*/ 1,
         nse_constraints);
 
@@ -1396,6 +1397,32 @@ namespace ExteriorCalculus
 
     this->pcout << "   Writing Boussinesq solution for one timestep... "
                 << std::flush;
+
+
+    //    std::vector<std::string> nse_names(dim, "vorticity");
+    //    nse_names.emplace_back("velocity");
+    //    nse_names.emplace_back("velocity");
+    //    nse_names.emplace_back("velocity");
+    //    nse_names.emplace_back("p");
+    //
+    //    std::vector<DataComponentInterpretation::DataComponentInterpretation>
+    //      nse_component_interpretation(
+    //        2 * dim + 1,
+    //        DataComponentInterpretation::component_is_part_of_vector);
+    //    nse_component_interpretation[2 * dim] =
+    //      DataComponentInterpretation::component_is_scalar;
+    //
+    //    DataOut<dim> data_out;
+    //    data_out.add_data_vector(nse_dof_handler,
+    //                             nse_solution,
+    //                             nse_names,
+    //                             nse_component_interpretation);
+    //    data_out.add_data_vector(temperature_dof_handler,
+    //                             temperature_solution,
+    //                             "T");
+    //    data_out.build_patches(
+    //      std::min(parameters.nse_velocity_degree,
+    //      parameters.temperature_degree));
 
     const FESystem<dim> joint_fe(nse_fe, 1, temperature_fe, 1);
 

@@ -22,7 +22,19 @@ PlanetGeometry<dim>::PlanetGeometry(double inner_radius, double outer_radius)
   TimerOutput::Scope timing_section(
     computing_timer, "PlanetGeometry - constructor with grid generation");
 
-  GridGenerator::hyper_shell(triangulation, center, inner_radius, outer_radius);
+  GridGenerator::hyper_shell(triangulation,
+                             center,
+                             inner_radius,
+                             outer_radius,
+                             /* n_cells */ 0,
+                             /* colorize */ true);
+
+  //  GridGenerator::half_hyper_shell(triangulation,
+  //                                  center,
+  //                                  inner_radius,
+  //                                  outer_radius,
+  //                                  /* n_cells */ 0,
+  //                                  /* colorize */ false);
 
   triangulation.set_all_manifold_ids_on_boundary(0);
   triangulation.set_manifold(0, boundary_description);
