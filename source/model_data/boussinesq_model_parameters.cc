@@ -10,6 +10,7 @@ CoreModelData::Parameters::Parameters(const std::string &parameter_filename)
   , final_time(1.0)
   , time_step(0.1)
   , initial_global_refinement(2)
+  , cuboid_geometry(false)
   , nse_theta(0.5)
   , nse_velocity_degree(2)
   , use_FEEC_solver(false)
@@ -58,6 +59,14 @@ CoreModelData::Parameters::declare_parameters(ParameterHandler &prm)
                         "The number of global refinement steps performed on "
                         "the initial coarse mesh, before the problem is first "
                         "solved there.");
+
+      prm.declare_entry(
+        "cuboid geometry",
+        "false",
+        Patterns::Bool(),
+        "Sets the domain geometry to cuboid. All directions are periodic apart "
+        "from the z-direction. This is useful for debugging and later to restrict "
+        "global simulations to a full 3D column.");
     }
     prm.leave_subsection();
 
@@ -165,6 +174,8 @@ CoreModelData::Parameters::parse_parameters(ParameterHandler &prm)
     prm.enter_subsection("Mesh parameters");
     {
       initial_global_refinement = prm.get_integer("initial global refinement");
+
+      cuboid_geometry = prm.get_bool("cuboid geometry");
     }
     prm.leave_subsection();
 

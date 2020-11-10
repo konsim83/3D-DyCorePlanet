@@ -12,7 +12,8 @@ namespace ExteriorCalculus
   template <int dim>
   BoussinesqModel<dim>::BoussinesqModel(CoreModelData::Parameters &parameters_)
     : PlanetGeometry<dim>(parameters_.physical_constants.R0,
-                          parameters_.physical_constants.R1)
+                          parameters_.physical_constants.R1,
+                          parameters_.cuboid_geometry)
     , parameters(parameters_)
     , temperature_mapping(2)
     , nse_fe(
@@ -43,12 +44,28 @@ namespace ExteriorCalculus
      */
     GridTools::scale(1 / parameters.reference_quantities.length,
                      this->triangulation);
-    /*
-     * We must also rescale the domain parameters since this enters the data of
-     * other objects (initial conditions etc)
-     */
-    parameters.physical_constants.R0 /= parameters.reference_quantities.length;
-    parameters.physical_constants.R1 /= parameters.reference_quantities.length;
+
+    {
+      /*
+       * We must also rescale the domain parameters since this enters the data
+       * of other objects (initial conditions etc)
+       */
+      if (parameters.cuboid_geometry)
+        {
+          /*
+           * Note that this assumes that the lower left corner is the origin.
+           */
+          this->center /= parameters.reference_quantities.length;
+        }
+
+      this->inner_radius /= parameters.reference_quantities.length;
+      this->outer_radius /= parameters.reference_quantities.length;
+      this->global_Omega_diameter /= parameters.reference_quantities.length;
+      parameters.physical_constants.R0 /=
+        parameters.reference_quantities.length;
+      parameters.physical_constants.R1 /=
+        parameters.reference_quantities.length;
+    }
   }
 
 
@@ -237,42 +254,104 @@ namespace ExteriorCalculus
       nse_constraints.reinit(nse_relevant_set);
       DoFTools::make_hanging_node_constraints(nse_dof_handler, nse_constraints);
 
-      /*
-       * Lower boundary (id=0)
-       */
-      VectorTools::project_boundary_values_curl_conforming_l2(
-        nse_dof_handler,
-        /*first vector component */ 0,
-        Functions::ZeroFunction<dim>(2 * dim),
-        /*boundary id*/ 0,
-        nse_constraints);
+      if (parameters.cuboid_geometry)
+        {
+          std::vector<GridTools::PeriodicFacePair<
+            typename DoFHandler<dim>::cell_iterator>>
+            periodicity_vector;
 
-      VectorTools::project_boundary_values_div_conforming(
-        nse_dof_handler,
-        /*first vector component */
-        3,
-        Functions::ZeroFunction<dim>(dim),
-        /*boundary id*/ 0,
-        nse_constraints);
+          /*
+           * All dimensions up to the last are periodic (z-direction is always
+           * bounded from below and form above)
+           */
+          for (unsigned int d = 0; d < dim - 1; ++d)
+            {
+              GridTools::collect_periodic_faces(nse_dof_handler,
+                                                /*b_id1*/ 2 * (d + 1) - 2,
+                                                /*b_id2*/ 2 * (d + 1) - 1,
+                                                /*direction*/ d,
+                                                periodicity_vector);
+            }
 
-      /*
-       * Upper boundary (id=1)
-       */
-      VectorTools::project_boundary_values_curl_conforming_l2(
-        nse_dof_handler,
-        /*first vector component */ 0,
-        Functions::ZeroFunction<dim>(2 * dim),
-        /*boundary id*/ 1,
-        nse_constraints);
+          DoFTools::make_periodicity_constraints<DoFHandler<dim>>(
+            periodicity_vector, nse_constraints);
 
-      VectorTools::project_boundary_values_div_conforming(
-        nse_dof_handler,
-        /*first vector component */
-        3,
-        Functions::ZeroFunction<dim>(dim),
-        //        ConstantFunction<dim>(1500, dim),
-        /*boundary id*/ 1,
-        nse_constraints);
+          /*
+           * Lower boundary (id=4)
+           */
+          VectorTools::project_boundary_values_curl_conforming_l2(
+            nse_dof_handler,
+            /*first vector component */ 0,
+            Functions::ZeroFunction<dim>(2 * dim),
+            /*boundary id*/ 4,
+            nse_constraints);
+
+          VectorTools::project_boundary_values_div_conforming(
+            nse_dof_handler,
+            /*first vector component */
+            3,
+            Functions::ZeroFunction<dim>(dim),
+            /*boundary id*/ 4,
+            nse_constraints);
+
+          /*
+           * Upper boundary (id=5)
+           */
+          VectorTools::project_boundary_values_curl_conforming_l2(
+            nse_dof_handler,
+            /*first vector component */ 0,
+            Functions::ZeroFunction<dim>(2 * dim),
+            /*boundary id*/ 5,
+            nse_constraints);
+
+          VectorTools::project_boundary_values_div_conforming(
+            nse_dof_handler,
+            /*first vector component */
+            3,
+            Functions::ZeroFunction<dim>(dim),
+            //        ConstantFunction<dim>(1500, dim),
+            /*boundary id*/ 5,
+            nse_constraints);
+        }
+      else
+        {
+          /*
+           * Lower boundary (id=0)
+           */
+          VectorTools::project_boundary_values_curl_conforming_l2(
+            nse_dof_handler,
+            /*first vector component */ 0,
+            Functions::ZeroFunction<dim>(2 * dim),
+            /*boundary id*/ 0,
+            nse_constraints);
+
+          VectorTools::project_boundary_values_div_conforming(
+            nse_dof_handler,
+            /*first vector component */
+            3,
+            Functions::ZeroFunction<dim>(dim),
+            /*boundary id*/ 0,
+            nse_constraints);
+
+          /*
+           * Upper boundary (id=1)
+           */
+          VectorTools::project_boundary_values_curl_conforming_l2(
+            nse_dof_handler,
+            /*first vector component */ 0,
+            Functions::ZeroFunction<dim>(2 * dim),
+            /*boundary id*/ 1,
+            nse_constraints);
+
+          VectorTools::project_boundary_values_div_conforming(
+            nse_dof_handler,
+            /*first vector component */
+            3,
+            Functions::ZeroFunction<dim>(dim),
+            //        ConstantFunction<dim>(1500, dim),
+            /*boundary id*/ 1,
+            nse_constraints);
+        }
 
       nse_constraints.close();
     }
@@ -287,13 +366,47 @@ namespace ExteriorCalculus
       DoFTools::make_hanging_node_constraints(temperature_dof_handler,
                                               temperature_constraints);
 
-      // Lower boundary
-      VectorTools::interpolate_boundary_values(
-        temperature_dof_handler,
-        /*boundary id*/ 0,
-        CoreModelData::Boussinesq::TemperatureInitialValues<dim>(
-          parameters.physical_constants.R0, parameters.physical_constants.R1),
-        temperature_constraints);
+      if (parameters.cuboid_geometry)
+        {
+          std::vector<GridTools::PeriodicFacePair<
+            typename DoFHandler<dim>::cell_iterator>>
+            periodicity_vector;
+
+          /*
+           * All dimensions up to the last are periodic (z-direction is always
+           * bounded from below and form above)
+           */
+          for (unsigned int d = 0; d < dim - 1; ++d)
+            {
+              GridTools::collect_periodic_faces(temperature_dof_handler,
+                                                /*b_id1*/ 2 * (d + 1) - 2,
+                                                /*b_id2*/ 2 * (d + 1) - 1,
+                                                /*direction*/ d,
+                                                periodicity_vector);
+            }
+
+          DoFTools::make_periodicity_constraints<DoFHandler<dim>>(
+            periodicity_vector, temperature_constraints);
+
+          // Dirchlet on boundary id 2/4 (lower in 2d/3d)
+          VectorTools::interpolate_boundary_values(
+            temperature_dof_handler,
+            (dim == 2 ? 2 : 4),
+            CoreModelData::Boussinesq::TemperatureInitialValuesCuboid<dim>(
+              this->center, this->global_Omega_diameter),
+            temperature_constraints);
+        }
+      else
+        {
+          // Lower boundary is Dirichlet, upper is no-flux and natural
+          VectorTools::interpolate_boundary_values(
+            temperature_dof_handler,
+            /*boundary id*/ 0,
+            CoreModelData::Boussinesq::TemperatureInitialValues<dim>(
+              parameters.physical_constants.R0,
+              parameters.physical_constants.R1),
+            temperature_constraints);
+        }
 
       temperature_constraints.close();
     }
@@ -396,12 +509,13 @@ namespace ExteriorCalculus
             //            scratch.nse_fe_values[pressure].value(k, q);
           }
 
-        const Tensor<1, dim> coriolis =
-          parameters.reference_quantities.length *
-          CoreModelData::coriolis_vector(scratch.nse_fe_values.quadrature_point(
-                                           q),
-                                         parameters.physical_constants.omega) /
-          parameters.reference_quantities.velocity;
+        Tensor<1, dim> coriolis;
+        if (parameters.cuboid_geometry)
+          coriolis = parameters.reference_quantities.length *
+                     CoreModelData::coriolis_vector(
+                       scratch.nse_fe_values.quadrature_point(q),
+                       parameters.physical_constants.omega) /
+                     parameters.reference_quantities.velocity;
 
         /*
          * Move everything to the LHS here.
@@ -431,9 +545,13 @@ namespace ExteriorCalculus
           (parameters.reference_quantities.length /
            (parameters.reference_quantities.velocity *
             parameters.reference_quantities.velocity)) *
-          CoreModelData::gravity_vector(
-            scratch.nse_fe_values.quadrature_point(q),
-            parameters.physical_constants.gravity_constant);
+          (parameters.cuboid_geometry ?
+             CoreModelData::vertical_gravity_vector(
+               scratch.nse_fe_values.quadrature_point(q),
+               parameters.physical_constants.gravity_constant) :
+             CoreModelData::gravity_vector(
+               scratch.nse_fe_values.quadrature_point(q),
+               parameters.physical_constants.gravity_constant));
 
         /*
          * This is only the RHS
@@ -1772,13 +1890,26 @@ namespace ExteriorCalculus
 
     LA::MPI::Vector solution_tmp(temperature_dof_handler.locally_owned_dofs());
 
-    VectorTools::project(
-      temperature_dof_handler,
-      temperature_constraints,
-      QGauss<dim>(parameters.temperature_degree + 2),
-      CoreModelData::Boussinesq::TemperatureInitialValues<dim>(
-        parameters.physical_constants.R0, parameters.physical_constants.R1),
-      solution_tmp);
+    if (parameters.cuboid_geometry)
+      {
+        VectorTools::project(
+          temperature_dof_handler,
+          temperature_constraints,
+          QGauss<dim>(parameters.temperature_degree + 2),
+          CoreModelData::Boussinesq::TemperatureInitialValuesCuboid<dim>(
+            this->center, this->global_Omega_diameter),
+          solution_tmp);
+      }
+    else
+      {
+        VectorTools::project(
+          temperature_dof_handler,
+          temperature_constraints,
+          QGauss<dim>(parameters.temperature_degree + 2),
+          CoreModelData::Boussinesq::TemperatureInitialValues<dim>(
+            parameters.physical_constants.R0, parameters.physical_constants.R1),
+          solution_tmp);
+      }
 
     old_nse_solution         = nse_solution;
     temperature_solution     = solution_tmp;

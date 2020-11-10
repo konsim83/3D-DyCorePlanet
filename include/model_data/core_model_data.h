@@ -102,6 +102,15 @@ namespace CoreModelData
                   const double temperature_bottom);
 
   /*!
+   * Compute vertical gravity vector at a given point.
+   *
+   * @return vertical gravity vector
+   */
+  template <int dim>
+  Tensor<1, dim>
+  vertical_gravity_vector(const Point<dim> &p, const double gravity_constant);
+
+  /*!
    * Compute gravity vector at a given point.
    *
    * @return gravity vector
@@ -121,6 +130,16 @@ namespace CoreModelData
   coriolis_vector(const Point<dim> &p, const double omega);
 
 } // namespace CoreModelData
+
+/*
+ * Extern template instantiations
+ */
+extern template Tensor<1, 2>
+CoreModelData::vertical_gravity_vector<2>(const Point<2> &p,
+                                          const double    gravity_constant);
+extern template Tensor<1, 3>
+CoreModelData::vertical_gravity_vector<3>(const Point<3> &p,
+                                          const double    gravity_constant);
 
 extern template Tensor<1, 2>
 CoreModelData::gravity_vector<2>(const Point<2> &p,

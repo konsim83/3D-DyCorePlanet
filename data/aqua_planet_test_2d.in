@@ -2,6 +2,11 @@ subsection Boussinesq Model
 
 	subsection Mesh parameters
 		set initial global refinement = 4
+		
+		# Sets the domain geometry to cuboid. All directions are periodic apart from
+   		# the z-direction. This is useful for debugging and later to restrict global
+		# simulations to a full 3D column.
+		set cuboid geometry = false
 	end
 	
 	subsection Reference quantities

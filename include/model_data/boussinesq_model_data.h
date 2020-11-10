@@ -123,6 +123,48 @@ namespace CoreModelData
       Tensor<2, dim> rotation;
     };
 
+
+    /*!
+     * Temerature initial values for rising warm bubble test in cuboid geometry.
+     */
+    template <int dim>
+    class TemperatureInitialValuesCuboid : public Function<dim>
+    {
+    public:
+      /*!
+       * Constructor.
+       */
+      TemperatureInitialValuesCuboid(const Point<dim> center,
+                                     const double     diameter);
+
+
+      /*!
+       * Return temperature value at a single point.
+       *
+       * @param p
+       * @param component
+       * @return
+       */
+      virtual double
+      value(const Point<dim> & p,
+            const unsigned int component = 0) const override;
+
+      /*!
+       * Return temperature value as a vector at a single point.
+       *
+       * @param points
+       * @param values
+       */
+      virtual void
+      value_list(const std::vector<Point<dim>> &points,
+                 std::vector<double> &          values,
+                 const unsigned int             component = 0) const override;
+
+    private:
+      Point<dim>     center;
+      Tensor<2, dim> covariance_matrix;
+    };
+
     //////////////////////////////////////////////////
     /// Temperature RHS
     //////////////////////////////////////////////////
@@ -187,6 +229,11 @@ extern template class CoreModelData::Boussinesq::VelocityInitialValues<3>;
 
 extern template class CoreModelData::Boussinesq::TemperatureInitialValues<2>;
 extern template class CoreModelData::Boussinesq::TemperatureInitialValues<3>;
+
+extern template class CoreModelData::Boussinesq::TemperatureInitialValuesCuboid<
+  2>;
+extern template class CoreModelData::Boussinesq::TemperatureInitialValuesCuboid<
+  3>;
 
 extern template class CoreModelData::Boussinesq::TemperatureRHS<2>;
 extern template class CoreModelData::Boussinesq::TemperatureRHS<3>;
