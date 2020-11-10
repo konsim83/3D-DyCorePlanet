@@ -184,6 +184,9 @@ namespace ExteriorCalculus
     solve_NSE_block_preconditioned();
 
     void
+    solve_NSE_Schur_complement_compressible();
+
+    void
     solve_NSE_Schur_complement();
 
     void
