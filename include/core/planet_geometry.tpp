@@ -3,7 +3,9 @@
 DYCOREPLANET_OPEN_NAMESPACE
 
 template <int dim>
-PlanetGeometry<dim>::PlanetGeometry(double inner_radius, double outer_radius)
+PlanetGeometry<dim>::PlanetGeometry(double inner_radius,
+                                    double outer_radius,
+                                    bool   cuboid_geometry)
   : mpi_communicator(MPI_COMM_WORLD)
   , pcout(std::cout, (Utilities::MPI::this_mpi_process(mpi_communicator) == 0))
   , computing_timer(mpi_communicator,
@@ -18,20 +20,61 @@ PlanetGeometry<dim>::PlanetGeometry(double inner_radius, double outer_radius)
   , inner_radius(inner_radius)
   , outer_radius(outer_radius)
   , boundary_description(center)
+  , cuboid_geometry(false)
 {
   TimerOutput::Scope timing_section(
     computing_timer, "PlanetGeometry - constructor with grid generation");
 
-  GridGenerator::hyper_shell(triangulation, center, inner_radius, outer_radius);
+  if (cuboid_geometry)
+    {
+      Point<dim> p0, p1;
+      p1(0) = 1;
+      p1(1) = 1;
+      if (dim == 3)
+        p1(2) = 1;
+      center = 0.5 * (p0 + p1);
+      GridGenerator::hyper_rectangle(triangulation,
+                                     p0,
+                                     p1,
+                                     /* colorize */ true);
 
-  triangulation.set_all_manifold_ids_on_boundary(0);
-  triangulation.set_manifold(0, boundary_description);
+      std::vector<
+        GridTools::PeriodicFacePair<typename Triangulation<dim>::cell_iterator>>
+        periodicity_vector;
 
-  typename Triangulation<dim>::active_cell_iterator cell = triangulation
-                                                             .begin_active(),
-                                                    endc = triangulation.end();
-  for (; cell != endc; ++cell)
-    cell->set_all_manifold_ids(0);
+      /*
+       * All dimensions up to the last are periodic (z-direction is always
+       * bounded from below and from above)
+       */
+      for (unsigned int d = 0; d < dim - 1; ++d)
+        {
+          GridTools::collect_periodic_faces(triangulation,
+                                            /*b_id1*/ 2 * (d + 1) - 2,
+                                            /*b_id2*/ 2 * (d + 1) - 1,
+                                            /*direction*/ d,
+                                            periodicity_vector);
+        }
+
+      triangulation.add_periodicity(periodicity_vector);
+    }
+  else
+    {
+      GridGenerator::hyper_shell(triangulation,
+                                 center,
+                                 inner_radius,
+                                 outer_radius,
+                                 /* n_cells */ 0,
+                                 /* colorize */ true);
+
+      triangulation.set_all_manifold_ids_on_boundary(0);
+      triangulation.set_manifold(0, boundary_description);
+
+      typename Triangulation<dim>::active_cell_iterator
+        cell = triangulation.begin_active(),
+        endc = triangulation.end();
+      for (; cell != endc; ++cell)
+        cell->set_all_manifold_ids(0);
+    }
 
   global_Omega_diameter = GridTools::diameter(triangulation);
 

@@ -46,7 +46,9 @@ public:
   /*!
    * Constructor of mesh handler for spherical shell.
    */
-  PlanetGeometry(double inner_radius, double outer_radius);
+  PlanetGeometry(double inner_radius,
+                 double outer_radius,
+                 bool   cuboid_geometry = false);
   ~PlanetGeometry();
 
 protected:
@@ -63,12 +65,19 @@ protected:
 
   parallel::distributed::Triangulation<dim> triangulation;
 
-  const Point<dim> center;
-  const double     inner_radius, outer_radius;
+  Point<dim> center;
+  double     inner_radius, outer_radius;
 
   double global_Omega_diameter;
 
   SphericalManifold<dim> boundary_description;
+
+  /*!
+   * Sets the domain geometry to cuboid. All directions are periodic apart from
+   * the z-direction. This is useful for debugging and later to restrict global
+   * simulations to a full 3D column.
+   */
+  bool cuboid_geometry;
 };
 
 

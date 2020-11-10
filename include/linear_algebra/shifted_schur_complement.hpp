@@ -15,7 +15,7 @@ DYCOREPLANET_OPEN_NAMESPACE
 namespace LinearAlgebra
 {
   /*!
-   * @class SchurComplement
+   * @class ShiftedSchurComplement
    *
    * @brief Implements a MPI parallel Schur complement
    *
@@ -50,7 +50,7 @@ namespace LinearAlgebra
   template <typename BlockMatrixType,
             typename VectorType,
             typename InverseMatrixType>
-  class SchurComplement : public Subscriptor
+  class ShiftedSchurComplement : public Subscriptor
   {
   private:
     using BlockType = typename BlockMatrixType::BlockType;
@@ -67,10 +67,10 @@ namespace LinearAlgebra
      * @param owned_partitioning
      * @param mpi_communicator
      */
-    SchurComplement(const BlockMatrixType &      system_matrix,
-                    const InverseMatrixType &    relevant_inverse_matrix,
-                    const std::vector<IndexSet> &owned_partitioning,
-                    MPI_Comm                     mpi_communicator);
+    ShiftedSchurComplement(const BlockMatrixType &      system_matrix,
+                           const InverseMatrixType &    relevant_inverse_matrix,
+                           const std::vector<IndexSet> &owned_partitioning,
+                           MPI_Comm                     mpi_communicator);
 
     /*!
      * Matrix-vector product.
@@ -91,6 +91,11 @@ namespace LinearAlgebra
      * Smart pointer to system matrix block 10.
      */
     const SmartPointer<const BlockType> block_10;
+
+    /*!
+     * Smart pointer to system matrix block 11.
+     */
+    const SmartPointer<const BlockType> block_11;
 
     /*!
      * Smart pointer to inverse upper left block of the system matrix.
@@ -122,13 +127,14 @@ namespace LinearAlgebra
   template <typename BlockMatrixType,
             typename VectorType,
             typename InverseMatrixType>
-  SchurComplement<BlockMatrixType, VectorType, InverseMatrixType>::
-    SchurComplement(const BlockMatrixType &      system_matrix,
-                    const InverseMatrixType &    relevant_inverse_matrix,
-                    const std::vector<IndexSet> &owned_partitioning,
-                    MPI_Comm                     mpi_communicator)
+  ShiftedSchurComplement<BlockMatrixType, VectorType, InverseMatrixType>::
+    ShiftedSchurComplement(const BlockMatrixType &      system_matrix,
+                           const InverseMatrixType &    relevant_inverse_matrix,
+                           const std::vector<IndexSet> &owned_partitioning,
+                           MPI_Comm                     mpi_communicator)
     : block_01(&(system_matrix.block(0, 1)))
     , block_10(&(system_matrix.block(1, 0)))
+    , block_11(&(system_matrix.block(1, 1)))
     , relevant_inverse_matrix(&relevant_inverse_matrix)
     , owned_partitioning(owned_partitioning)
     , mpi_communicator(mpi_communicator)
@@ -140,13 +146,15 @@ namespace LinearAlgebra
             typename VectorType,
             typename InverseMatrixType>
   void
-  SchurComplement<BlockMatrixType, VectorType, InverseMatrixType>::vmult(
+  ShiftedSchurComplement<BlockMatrixType, VectorType, InverseMatrixType>::vmult(
     VectorType &      dst,
     const VectorType &src) const
   {
+    block_11->vmult(dst, src);
     block_01->vmult(tmp1, src);
     relevant_inverse_matrix->vmult(tmp2, tmp1);
-    block_10->vmult(dst, tmp2);
+    tmp2 *= -1;
+    block_10->vmult_add(dst, tmp2);
   }
 } // end namespace LinearAlgebra
 

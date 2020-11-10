@@ -6,18 +6,22 @@ DYCOREPLANET_OPEN_NAMESPACE
 CoreModelData::Parameters::Parameters(const std::string &parameter_filename)
   : space_dimension(2)
   , reference_quantities(parameter_filename)
-  , physical_constants(parameter_filename, reference_quantities)
+  , physical_constants(parameter_filename)
   , final_time(1.0)
   , time_step(0.1)
   , initial_global_refinement(2)
+  , cuboid_geometry(false)
   , nse_theta(0.5)
   , nse_velocity_degree(2)
+  , use_FEEC_solver(false)
   , use_locally_conservative_discretization(true)
+  , solver_diagnostics_print_level(1)
   , use_schur_complement_solver(true)
   , use_direct_solver(false)
   , NSE_solver_interval(1)
   , temperature_theta(0.5)
   , temperature_degree(2)
+  , hello_from_cluster(false)
 {
   ParameterHandler prm;
   CoreModelData::Parameters::declare_parameters(prm);
@@ -55,6 +59,14 @@ CoreModelData::Parameters::declare_parameters(ParameterHandler &prm)
                         "The number of global refinement steps performed on "
                         "the initial coarse mesh, before the problem is first "
                         "solved there.");
+
+      prm.declare_entry(
+        "cuboid geometry",
+        "false",
+        Patterns::Bool(),
+        "Sets the domain geometry to cuboid. All directions are periodic apart "
+        "from the z-direction. This is useful for debugging and later to restrict "
+        "global simulations to a full 3D column.");
     }
     prm.leave_subsection();
 
@@ -85,6 +97,12 @@ CoreModelData::Parameters::declare_parameters(ParameterHandler &prm)
                       "in the NSE system.");
 
     prm.declare_entry(
+      "use FEEC solver",
+      "false",
+      Patterns::Bool(),
+      "Replace standard H1-L2 elements with	pairings and solvers appropriate for H(curl)-H(div)-L2 elements.");
+
+    prm.declare_entry(
       "use locally conservative discretization",
       "true",
       Patterns::Bool(),
@@ -93,6 +111,11 @@ CoreModelData::Parameters::declare_parameters(ParameterHandler &prm)
       "of freedom, or to go with a cheaper discretization "
       "that does not locally conserve mass (although it is "
       "globally conservative.");
+
+    prm.declare_entry("solver diagnostics level",
+                      "1",
+                      Patterns::Integer(0),
+                      "Output level for solver for debug purposes.");
 
     prm.declare_entry(
       "use schur complement solver",
@@ -121,6 +144,22 @@ CoreModelData::Parameters::declare_parameters(ParameterHandler &prm)
       "2",
       Patterns::Integer(1),
       "The polynomial degree to use for the temperature variable.");
+
+    prm.declare_entry("filename output",
+                      "dycore",
+                      Patterns::FileName(),
+                      "Base filename for output.");
+
+    prm.declare_entry("dirname output",
+                      "data-output",
+                      Patterns::FileName(),
+                      "Name of output directory.");
+
+    prm.declare_entry(
+      "hello from cluster",
+      "false",
+      Patterns::Bool(),
+      "Output some (node) information of each MPI process (rank, node name, number of threads).");
   }
   prm.leave_subsection();
 }
@@ -135,6 +174,8 @@ CoreModelData::Parameters::parse_parameters(ParameterHandler &prm)
     prm.enter_subsection("Mesh parameters");
     {
       initial_global_refinement = prm.get_integer("initial global refinement");
+
+      cuboid_geometry = prm.get_bool("cuboid geometry");
     }
     prm.leave_subsection();
 
@@ -145,8 +186,14 @@ CoreModelData::Parameters::parse_parameters(ParameterHandler &prm)
 
     nse_theta           = prm.get_double("nse theta");
     nse_velocity_degree = prm.get_integer("nse velocity degree");
+
+    use_FEEC_solver = prm.get_bool("use FEEC solver");
+
     use_locally_conservative_discretization =
       prm.get_bool("use locally conservative discretization");
+
+    solver_diagnostics_print_level =
+      prm.get_integer("solver diagnostics level");
     use_schur_complement_solver = prm.get_bool("use schur complement solver");
     use_direct_solver           = prm.get_bool("use direct solver");
 
@@ -154,6 +201,11 @@ CoreModelData::Parameters::parse_parameters(ParameterHandler &prm)
 
     temperature_theta  = prm.get_double("temperature theta");
     temperature_degree = prm.get_integer("temperature degree");
+
+    filename_output = prm.get("filename output");
+    dirname_output  = prm.get("dirname output");
+
+    hello_from_cluster = prm.get_bool("hello from cluster");
   }
   prm.leave_subsection();
 }

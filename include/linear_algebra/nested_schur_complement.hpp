@@ -15,42 +15,44 @@ DYCOREPLANET_OPEN_NAMESPACE
 namespace LinearAlgebra
 {
   /*!
-   * @class SchurComplement
+   * @class NestedSchurComplement
    *
-   * @brief Implements a MPI parallel Schur complement
+   * @brief Implements a MPI parallel nested Schur complement
    *
-   * Implements a parallel Schur complement through the use of an inner inverse
-   * matrix, i.e., if we want to solve
-   * \f{eqnarray}{
-   *	\left(
-   *	\begin{array}{cc}
-   *		A & B^T \\
-   *		B & 0
+   * Implements a parallel nested Schur complement through the use of two inner
+   * inverse matrices, i.e., if we want to solve
+   * \f{eqnarray}{ \left(
+   *	\begin{array}{ccc}
+   *		M & R_w & 0 \\
+   *		R_u & A & B^T \\
+   *		0 & B & 0
    *	\end{array}
    *	\right)
    *	\left(
    *	\begin{array}{c}
-   *		\sigma \\
-   *		u
+   *		w \\
+   *		u \\
+   *		p
    *	\end{array}
    *	\right)
    *	=
    *	\left(
    *	\begin{array}{c}
+   *		0 \\
    *		f \\
    *		0
    *	\end{array}
    *	\right)
    * \f}
-   * and know that \f$A\f$ is invertible then we first define the inverse and
-   *define the Schur complement as \f{eqnarray}{ \tilde S = BP_A^{-1}B^T \f}
-   *to solve for \f$u\f$. The inverse must be separately given to the class as
+   * and know that \f$M\f$ and \f$A\f$ are invertible. We do so by using nested
+   * Schur complement solvers to first solve for \f$p\f$, then for \f$u\f$ and
+   * finally for \f$w\f$. The inverse must be separately given to the class as
    *an input argument.
    */
   template <typename BlockMatrixType,
             typename VectorType,
             typename InverseMatrixType>
-  class SchurComplement : public Subscriptor
+  class NestedSchurComplement : public Subscriptor
   {
   private:
     using BlockType = typename BlockMatrixType::BlockType;
@@ -67,10 +69,10 @@ namespace LinearAlgebra
      * @param owned_partitioning
      * @param mpi_communicator
      */
-    SchurComplement(const BlockMatrixType &      system_matrix,
-                    const InverseMatrixType &    relevant_inverse_matrix,
-                    const std::vector<IndexSet> &owned_partitioning,
-                    MPI_Comm                     mpi_communicator);
+    NestedSchurComplement(const BlockMatrixType &      system_matrix,
+                          const InverseMatrixType &    relevant_inverse_matrix,
+                          const std::vector<IndexSet> &owned_partitioning,
+                          MPI_Comm                     mpi_communicator);
 
     /*!
      * Matrix-vector product.
@@ -83,14 +85,14 @@ namespace LinearAlgebra
 
   private:
     /*!
-     * Smart pointer to system matrix block 01.
+     * Smart pointer to system matrix block 12.
      */
-    const SmartPointer<const BlockType> block_01;
+    const SmartPointer<const BlockType> block_12;
 
     /*!
-     * Smart pointer to system matrix block 10.
+     * Smart pointer to system matrix block 21.
      */
-    const SmartPointer<const BlockType> block_10;
+    const SmartPointer<const BlockType> block_21;
 
     /*!
      * Smart pointer to inverse upper left block of the system matrix.
@@ -122,31 +124,31 @@ namespace LinearAlgebra
   template <typename BlockMatrixType,
             typename VectorType,
             typename InverseMatrixType>
-  SchurComplement<BlockMatrixType, VectorType, InverseMatrixType>::
-    SchurComplement(const BlockMatrixType &      system_matrix,
-                    const InverseMatrixType &    relevant_inverse_matrix,
-                    const std::vector<IndexSet> &owned_partitioning,
-                    MPI_Comm                     mpi_communicator)
-    : block_01(&(system_matrix.block(0, 1)))
-    , block_10(&(system_matrix.block(1, 0)))
+  NestedSchurComplement<BlockMatrixType, VectorType, InverseMatrixType>::
+    NestedSchurComplement(const BlockMatrixType &      system_matrix,
+                          const InverseMatrixType &    relevant_inverse_matrix,
+                          const std::vector<IndexSet> &owned_partitioning,
+                          MPI_Comm                     mpi_communicator)
+    : block_12(&(system_matrix.block(1, 2)))
+    , block_21(&(system_matrix.block(2, 1)))
     , relevant_inverse_matrix(&relevant_inverse_matrix)
     , owned_partitioning(owned_partitioning)
     , mpi_communicator(mpi_communicator)
-    , tmp1(owned_partitioning[0], mpi_communicator)
-    , tmp2(owned_partitioning[0], mpi_communicator)
+    , tmp1(owned_partitioning[1], mpi_communicator)
+    , tmp2(owned_partitioning[1], mpi_communicator)
   {}
 
   template <typename BlockMatrixType,
             typename VectorType,
             typename InverseMatrixType>
   void
-  SchurComplement<BlockMatrixType, VectorType, InverseMatrixType>::vmult(
+  NestedSchurComplement<BlockMatrixType, VectorType, InverseMatrixType>::vmult(
     VectorType &      dst,
     const VectorType &src) const
   {
-    block_01->vmult(tmp1, src);
+    block_12->vmult(tmp1, src);
     relevant_inverse_matrix->vmult(tmp2, tmp1);
-    block_10->vmult(dst, tmp2);
+    block_21->vmult(dst, tmp2);
   }
 } // end namespace LinearAlgebra
 

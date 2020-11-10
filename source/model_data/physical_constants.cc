@@ -4,9 +4,11 @@ DYCOREPLANET_OPEN_NAMESPACE
 
 
 CoreModelData::PhysicalConstants::PhysicalConstants(
-  const std::string & parameter_filename,
-  ReferenceQuantities reference_quantities)
-  : universal_gas_constant(8.31446261815324)
+  const std::string &parameter_filename)
+  : pressure(1.01325e+5)
+  , omega(7.272205e-5)
+  , density(1.29)
+  , universal_gas_constant(8.31446261815324)
   , specific_gas_constant_dry(2)
   , expansion_coefficient(1 / 273.15)
   , dynamic_viscosity(1.82e-5)
@@ -40,7 +42,7 @@ CoreModelData::PhysicalConstants::PhysicalConstants(
                   /* filename = */ "generated_parameter.in",
                   /* last_line = */ "",
                   /* skip_undefined = */ true);
-  parse_parameters(prm, reference_quantities);
+  parse_parameters(prm);
 }
 
 
@@ -50,6 +52,21 @@ CoreModelData::PhysicalConstants::declare_parameters(ParameterHandler &prm)
 {
   prm.enter_subsection("Physical Constants");
   {
+    prm.declare_entry("omega",
+                      "7.272205e-5",
+                      Patterns::Double(0),
+                      "Reference angular velocity [rad/s].");
+
+    prm.declare_entry("average atm pressure",
+                      "1.01325e+5",
+                      Patterns::Double(0),
+                      "Reference pressure.");
+
+    prm.declare_entry("density",
+                      "1.29",
+                      Patterns::Double(0),
+                      "Reference density.");
+
     prm.declare_entry("universal_gas_constant",
                       "8.31446261815324",
                       Patterns::Double(0),
@@ -116,26 +133,27 @@ CoreModelData::PhysicalConstants::declare_parameters(ParameterHandler &prm)
 
 
 void
-CoreModelData::PhysicalConstants::parse_parameters(
-  ParameterHandler &  prm,
-  ReferenceQuantities reference_quantities)
+CoreModelData::PhysicalConstants::parse_parameters(ParameterHandler &prm)
 {
   prm.enter_subsection("Physical Constants");
   {
+    pressure = prm.get_double("average atm pressure"); /* Pa */
+    omega    = prm.get_double("omega");                /* 1/s */
+    density  = prm.get_double("density");              /* kg / m^3 */
+
     universal_gas_constant    = prm.get_double("universal_gas_constant");
     specific_gas_constant_dry = prm.get_double("specific_gas_constant_dry");
     expansion_coefficient     = prm.get_double("expansion coefficient");
 
     dynamic_viscosity = prm.get_double("dynamic_viscosity");
 
-    kinematic_viscosity = dynamic_viscosity / reference_quantities.density;
+    kinematic_viscosity = dynamic_viscosity / density;
 
     specific_heat_p      = prm.get_double("specific_heat_p");
     specific_heat_v      = prm.get_double("specific_heat_v");
     thermal_conductivity = prm.get_double("thermal_conductivity");
 
-    thermal_diffusivity =
-      thermal_conductivity / (specific_heat_p * reference_quantities.pressure);
+    thermal_diffusivity = thermal_conductivity / (specific_heat_p * pressure);
 
     radiogenic_heating = prm.get_double("radiogenic_heating");
     gravity_constant   = prm.get_double("gravity_constant");

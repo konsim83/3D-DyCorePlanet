@@ -44,7 +44,8 @@ namespace LinearAlgebra
      * @param preconditioner
      */
     InverseMatrix(const MatrixType &        m,
-                  const PreconditionerType &preconditioner);
+                  const PreconditionerType &preconditioner,
+                  bool                      use_simple_cg = true);
 
     /*!
      * Matrix-vector multiplication.
@@ -66,6 +67,8 @@ namespace LinearAlgebra
      * Preconditioner.
      */
     const PreconditionerType &preconditioner;
+
+    const bool use_simple_cg;
   };
 
 
@@ -77,9 +80,11 @@ namespace LinearAlgebra
   template <typename MatrixType, typename PreconditionerType>
   InverseMatrix<MatrixType, PreconditionerType>::InverseMatrix(
     const MatrixType &        m,
-    const PreconditionerType &preconditioner)
+    const PreconditionerType &preconditioner,
+    bool                      use_simple_cg)
     : matrix(&m)
     , preconditioner(preconditioner)
+    , use_simple_cg(use_simple_cg)
   {}
 
   template <typename MatrixType, typename PreconditionerType>
@@ -92,13 +97,21 @@ namespace LinearAlgebra
     SolverControl solver_control(std::max(static_cast<std::size_t>(src.size()),
                                           static_cast<std::size_t>(1000)),
                                  1e-6 * src.l2_norm());
-    SolverGMRES<VectorType> local_solver(solver_control);
 
     dst = 0;
 
     try
       {
-        local_solver.solve(*matrix, dst, src, preconditioner);
+        if (use_simple_cg)
+          {
+            SolverCG<VectorType> local_solver(solver_control);
+            local_solver.solve(*matrix, dst, src, preconditioner);
+          }
+        else
+          {
+            SolverGMRES<VectorType> local_solver(solver_control);
+            local_solver.solve(*matrix, dst, src, preconditioner);
+          }
       }
     catch (std::exception &e)
       {

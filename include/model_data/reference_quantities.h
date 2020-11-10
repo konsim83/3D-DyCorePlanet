@@ -26,22 +26,6 @@ namespace CoreModelData
     parse_parameters(ParameterHandler &prm);
 
     /*!
-     * Earth reference pressure.
-     */
-    double pressure; /* Pa */
-
-    /*!
-     * Earth angular velocity.
-     */
-    double omega; /* 1/s */
-
-    /*!
-     * Reference density of air at bottom reference
-     * temperature.
-     */
-    double density; /* kg / m^3 */
-
-    /*!
      * Reference time is one hour.
      */
     double time; /* s */

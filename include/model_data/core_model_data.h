@@ -25,12 +25,29 @@ namespace CoreModelData
                       const double kinematic_viscosity);
 
   /*!
-   * Return the Peclet number of the flow.
+   * Return the Peclet number of the flow. This is the ratio af advective time
+   * scale to the diffusive time scale.
    */
   double
   get_peclet_number(const double velocity,
                     const double length,
                     const double thermal_diffusivity);
+
+  /*!
+   * Return the Rossby number of the flow. This is the ratio of inertial to
+   * coriolis forces.
+   */
+  double
+  get_rossby_number(const double length,
+                    const double omega,
+                    const double velocity);
+
+  /*!
+   * Reference acceleration. The inverse enters as a scaling factor to the
+   * right-hand side of the equation.
+   */
+  double
+  get_reference_accelleration(const double length, const double velocity);
 
   /*!
    * Return the Grashoff number of the flow.
@@ -85,6 +102,15 @@ namespace CoreModelData
                   const double temperature_bottom);
 
   /*!
+   * Compute vertical gravity vector at a given point.
+   *
+   * @return vertical gravity vector
+   */
+  template <int dim>
+  Tensor<1, dim>
+  vertical_gravity_vector(const Point<dim> &p, const double gravity_constant);
+
+  /*!
    * Compute gravity vector at a given point.
    *
    * @return gravity vector
@@ -104,6 +130,16 @@ namespace CoreModelData
   coriolis_vector(const Point<dim> &p, const double omega);
 
 } // namespace CoreModelData
+
+/*
+ * Extern template instantiations
+ */
+extern template Tensor<1, 2>
+CoreModelData::vertical_gravity_vector<2>(const Point<2> &p,
+                                          const double    gravity_constant);
+extern template Tensor<1, 3>
+CoreModelData::vertical_gravity_vector<3>(const Point<3> &p,
+                                          const double    gravity_constant);
 
 extern template Tensor<1, 2>
 CoreModelData::gravity_vector<2>(const Point<2> &p,

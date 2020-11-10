@@ -18,15 +18,29 @@ namespace CoreModelData
    */
   struct PhysicalConstants
   {
-    PhysicalConstants(const std::string & parameter_filename,
-                      ReferenceQuantities reference_quantities);
+    PhysicalConstants(const std::string &parameter_filename);
 
     static void
     declare_parameters(ParameterHandler &prm);
 
     void
-    parse_parameters(ParameterHandler &  prm,
-                     ReferenceQuantities reference_quantities);
+    parse_parameters(ParameterHandler &prm);
+
+    /*!
+     * Earth reference pressure.
+     */
+    double pressure; /* Pa */
+
+    /*!
+     * Earth angular velocity.
+     */
+    double omega; /* 1/s */
+
+    /*!
+     * Reference density of air at bottom reference
+     * temperature.
+     */
+    double density; /* kg / m^3 */
 
     /*!
      * Universal gas constant.

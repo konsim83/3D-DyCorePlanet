@@ -1,9 +1,9 @@
-#include <core/boussinesq_model.h>
+#include <core/boussineq_model_FEEC.h>
 #include <core/planet_geometry.h>
 
 DYCOREPLANET_OPEN_NAMESPACE
 
-namespace Standard
+namespace ExteriorCalculus
 {
   //////////////////////////////////////////////////////
   /// Standard Boussinesq model in H1-L2
@@ -15,15 +15,17 @@ namespace Standard
                           parameters_.physical_constants.R1,
                           parameters_.cuboid_geometry)
     , parameters(parameters_)
-    , mapping(3)
-    , nse_fe(FE_Q<dim>(parameters.nse_velocity_degree),
-             dim,
-             (parameters.use_locally_conservative_discretization ?
-                static_cast<const FiniteElement<dim> &>(
-                  FE_DGP<dim>(parameters.nse_velocity_degree - 1)) :
-                static_cast<const FiniteElement<dim> &>(
-                  FE_Q<dim>(parameters.nse_velocity_degree - 1))),
-             1)
+    , temperature_mapping(2)
+    , nse_fe(
+        static_cast<const FiniteElement<dim> &>(FE_Nedelec<dim>(
+          std::max(static_cast<int>(parameters.nse_velocity_degree) - 1, 0))),
+        1,
+        static_cast<const FiniteElement<dim> &>(FE_RaviartThomas<dim>(
+          std::max(static_cast<int>(parameters.nse_velocity_degree) - 1, 0))),
+        1,
+        static_cast<const FiniteElement<dim> &>(FE_DGQ<dim>(
+          std::max(static_cast<int>(parameters.nse_velocity_degree) - 1, 0))),
+        1)
     , nse_dof_handler(this->triangulation)
     , temperature_fe(parameters.temperature_degree)
     , temperature_dof_handler(this->triangulation)
@@ -39,6 +41,7 @@ namespace Standard
      */
     GridTools::scale(1 / parameters.reference_quantities.length,
                      this->triangulation);
+
     {
       /*
        * We must also rescale the domain parameters since this enters the data
@@ -81,17 +84,36 @@ namespace Standard
     const std::vector<IndexSet> &nse_relevant_partitioning)
   {
     nse_matrix.clear();
-    LA::BlockSparsityPattern     sp(nse_partitioning,
+    LA::BlockSparsityPattern sp(nse_partitioning,
                                 nse_partitioning,
                                 nse_relevant_partitioning,
                                 this->mpi_communicator);
-    Table<2, DoFTools::Coupling> coupling(dim + 1, dim + 1);
-    for (unsigned int c = 0; c < dim + 1; ++c)
-      for (unsigned int d = 0; d < dim + 1; ++d)
-        if (!((c == dim) && (d == dim)))
-          coupling[c][d] = DoFTools::always;
-        else
-          coupling[c][d] = DoFTools::none;
+
+    Table<2, DoFTools::Coupling> coupling(2 * dim + 1, 2 * dim + 1);
+    for (unsigned int c = 0; c < 2 * dim + 1; ++c)
+      {
+        for (unsigned int d = 0; d < 2 * dim + 1; ++d)
+          {
+            if (c < dim)
+              {
+                if (d < 2 * dim - 1)
+                  coupling[c][d] = DoFTools::always;
+                else
+                  coupling[c][d] = DoFTools::none;
+              }
+            else if ((c >= dim) && (c < 2 * dim))
+              {
+                coupling[c][d] = DoFTools::always;
+              }
+            else if (c == 2 * dim)
+              {
+                if ((d >= dim) && (d < 2 * dim))
+                  coupling[c][d] = DoFTools::always;
+                else
+                  coupling[c][d] = DoFTools::none;
+              }
+          }
+      }
 
     DoFTools::make_sparsity_pattern(nse_dof_handler,
                                     coupling,
@@ -110,44 +132,6 @@ namespace Standard
   }
 
 
-
-  template <int dim>
-  void
-  BoussinesqModel<dim>::setup_nse_preconditioner(
-    const std::vector<IndexSet> &nse_partitioning,
-    const std::vector<IndexSet> &nse_relevant_partitioning)
-  {
-    Amg_preconditioner.reset();
-    Mp_preconditioner.reset();
-
-    nse_preconditioner_matrix.clear();
-    LA::BlockSparsityPattern sp(nse_partitioning,
-                                nse_partitioning,
-                                nse_relevant_partitioning,
-                                this->mpi_communicator);
-
-    Table<2, DoFTools::Coupling> coupling(dim + 1, dim + 1);
-    for (unsigned int c = 0; c < dim + 1; ++c)
-      for (unsigned int d = 0; d < dim + 1; ++d)
-        if (c == d)
-          coupling[c][d] = DoFTools::always;
-        else
-          coupling[c][d] = DoFTools::none;
-
-    DoFTools::make_sparsity_pattern(nse_dof_handler,
-                                    coupling,
-                                    sp,
-                                    nse_constraints,
-                                    false,
-                                    Utilities::MPI::this_mpi_process(
-                                      this->mpi_communicator));
-    sp.compress();
-
-    nse_preconditioner_matrix.reinit(sp);
-  }
-
-
-
   template <int dim>
   void
   BoussinesqModel<dim>::setup_temperature_matrices(
@@ -163,6 +147,7 @@ namespace Standard
                            temperature_partitioner,
                            temperature_relevant_partitioner,
                            this->mpi_communicator);
+
     DoFTools::make_sparsity_pattern(temperature_dof_handler,
                                     sp,
                                     temperature_constraints,
@@ -189,28 +174,21 @@ namespace Standard
     /*
      * Setup dof handlers for nse and temperature
      */
-    std::vector<unsigned int> nse_sub_blocks(dim + 1, 0);
-    nse_sub_blocks[dim] = 1;
-
     nse_dof_handler.distribute_dofs(nse_fe);
-    if (parameters.use_schur_complement_solver)
-      {
-        DoFRenumbering::Cuthill_McKee(nse_dof_handler);
-        //  DoFRenumbering::boost::king_ordering(nse_dof_handler);
-      }
 
-    DoFRenumbering::component_wise(nse_dof_handler, nse_sub_blocks);
+    DoFRenumbering::Cuthill_McKee(nse_dof_handler);
+    //  DoFRenumbering::boost::king_ordering(nse_dof_handler);
+    DoFRenumbering::block_wise(nse_dof_handler);
 
     temperature_dof_handler.distribute_dofs(temperature_fe);
 
     /*
      * Count dofs
      */
-    std::vector<types::global_dof_index> nse_dofs_per_block(2);
-    DoFTools::count_dofs_per_block(nse_dof_handler,
-                                   nse_dofs_per_block,
-                                   nse_sub_blocks);
-    const unsigned int n_u = nse_dofs_per_block[0], n_p = nse_dofs_per_block[1],
+    std::vector<types::global_dof_index> nse_dofs_per_block(3);
+    DoFTools::count_dofs_per_block(nse_dof_handler, nse_dofs_per_block);
+    const unsigned int n_w = nse_dofs_per_block[0], n_u = nse_dofs_per_block[1],
+                       n_p = nse_dofs_per_block[2],
                        n_T = temperature_dof_handler.n_dofs();
 
     /*
@@ -225,8 +203,9 @@ namespace Standard
     this->pcout << "Number of active cells: "
                 << this->triangulation.n_global_active_cells() << " (on "
                 << this->triangulation.n_levels() << " levels)" << std::endl
-                << "Number of degrees of freedom: " << n_u + n_p + n_T << " ("
-                << n_u << " + " << n_p << " + " << n_T << ")" << std::endl
+                << "Number of degrees of freedom: " << n_w + n_u + n_p + n_T
+                << " (" << n_w << " + " << n_u << " + " << n_p << " + " << n_T
+                << ")" << std::endl
                 << std::endl;
     this->pcout.get_stream().imbue(s);
 
@@ -239,13 +218,18 @@ namespace Standard
 
     {
       nse_index_set = nse_dof_handler.locally_owned_dofs();
-      nse_partitioning.push_back(nse_index_set.get_view(0, n_u));
-      nse_partitioning.push_back(nse_index_set.get_view(n_u, n_u + n_p));
+      nse_partitioning.push_back(nse_index_set.get_view(0, n_w));
+      nse_partitioning.push_back(nse_index_set.get_view(n_w, n_w + n_u));
+      nse_partitioning.push_back(
+        nse_index_set.get_view(n_w + n_u, n_w + n_u + n_p));
+
       DoFTools::extract_locally_relevant_dofs(nse_dof_handler,
                                               nse_relevant_set);
-      nse_relevant_partitioning.push_back(nse_relevant_set.get_view(0, n_u));
+      nse_relevant_partitioning.push_back(nse_relevant_set.get_view(0, n_w));
       nse_relevant_partitioning.push_back(
-        nse_relevant_set.get_view(n_u, n_u + n_p));
+        nse_relevant_set.get_view(n_w, n_w + n_u));
+      nse_relevant_partitioning.push_back(
+        nse_relevant_set.get_view(n_w + n_u, n_w + n_u + n_p));
       temperature_partitioning = temperature_dof_handler.locally_owned_dofs();
       DoFTools::extract_locally_relevant_dofs(
         temperature_dof_handler, temperature_relevant_partitioning);
@@ -260,7 +244,6 @@ namespace Standard
       nse_constraints.clear();
       nse_constraints.reinit(nse_relevant_set);
       DoFTools::make_hanging_node_constraints(nse_dof_handler, nse_constraints);
-
 
       if (parameters.cuboid_geometry)
         {
@@ -284,49 +267,81 @@ namespace Standard
           DoFTools::make_periodicity_constraints<DoFHandler<dim>>(
             periodicity_vector, nse_constraints);
 
-          FEValuesExtractors::Vector velocity_components(0);
-
-          // No-slip on boundary id 2/4 (lower in 2d/3d)
-          VectorTools::interpolate_boundary_values(
+          /*
+           * Lower boundary (id=4)
+           */
+          VectorTools::project_boundary_values_curl_conforming_l2(
             nse_dof_handler,
-            (dim == 2 ? 2 : 4),
-            Functions::ZeroFunction<dim>(dim + 1),
-            nse_constraints,
-            nse_fe.component_mask(velocity_components));
+            /*first vector component */ 0,
+            Functions::ZeroFunction<dim>(2 * dim),
+            /*boundary id*/ 4,
+            nse_constraints);
 
-          // No-flux on boundary id 3/5 (upper in 2d/3d)
-          std::set<types::boundary_id> no_normal_flux_boundaries;
-          no_normal_flux_boundaries.insert((dim == 2 ? 3 : 5));
-
-          VectorTools::compute_no_normal_flux_constraints(
+          VectorTools::project_boundary_values_div_conforming(
             nse_dof_handler,
-            0,
-            no_normal_flux_boundaries,
-            nse_constraints,
-            mapping);
+            /*first vector component */
+            3,
+            Functions::ZeroFunction<dim>(dim),
+            /*boundary id*/ 4,
+            nse_constraints);
+
+          /*
+           * Upper boundary (id=5)
+           */
+          VectorTools::project_boundary_values_curl_conforming_l2(
+            nse_dof_handler,
+            /*first vector component */ 0,
+            Functions::ZeroFunction<dim>(2 * dim),
+            /*boundary id*/ 5,
+            nse_constraints);
+
+          VectorTools::project_boundary_values_div_conforming(
+            nse_dof_handler,
+            /*first vector component */
+            3,
+            Functions::ZeroFunction<dim>(dim),
+            //        ConstantFunction<dim>(1500, dim),
+            /*boundary id*/ 5,
+            nse_constraints);
         }
       else
         {
-          FEValuesExtractors::Vector velocity_components(0);
-
-          // No-slip on boundary 0 (lower)
-          VectorTools::interpolate_boundary_values(
+          /*
+           * Lower boundary (id=0)
+           */
+          VectorTools::project_boundary_values_curl_conforming_l2(
             nse_dof_handler,
-            0,
-            Functions::ZeroFunction<dim>(dim + 1),
-            nse_constraints,
-            nse_fe.component_mask(velocity_components));
+            /*first vector component */ 0,
+            Functions::ZeroFunction<dim>(2 * dim),
+            /*boundary id*/ 0,
+            nse_constraints);
 
-          // No-flux on upper boundary
-          std::set<types::boundary_id> no_normal_flux_boundaries;
-          no_normal_flux_boundaries.insert(1);
-
-          VectorTools::compute_no_normal_flux_constraints(
+          VectorTools::project_boundary_values_div_conforming(
             nse_dof_handler,
-            /* first_vector_component */ 0,
-            no_normal_flux_boundaries,
-            nse_constraints,
-            mapping);
+            /*first vector component */
+            3,
+            Functions::ZeroFunction<dim>(dim),
+            /*boundary id*/ 0,
+            nse_constraints);
+
+          /*
+           * Upper boundary (id=1)
+           */
+          VectorTools::project_boundary_values_curl_conforming_l2(
+            nse_dof_handler,
+            /*first vector component */ 0,
+            Functions::ZeroFunction<dim>(2 * dim),
+            /*boundary id*/ 1,
+            nse_constraints);
+
+          VectorTools::project_boundary_values_div_conforming(
+            nse_dof_handler,
+            /*first vector component */
+            3,
+            Functions::ZeroFunction<dim>(dim),
+            //        ConstantFunction<dim>(1500, dim),
+            /*boundary id*/ 1,
+            nse_constraints);
         }
 
       nse_constraints.close();
@@ -338,6 +353,7 @@ namespace Standard
     {
       temperature_constraints.clear();
       temperature_constraints.reinit(temperature_relevant_partitioning);
+
       DoFTools::make_hanging_node_constraints(temperature_dof_handler,
                                               temperature_constraints);
 
@@ -376,7 +392,7 @@ namespace Standard
           // Lower boundary is Dirichlet, upper is no-flux and natural
           VectorTools::interpolate_boundary_values(
             temperature_dof_handler,
-            0,
+            /*boundary id*/ 0,
             CoreModelData::Boussinesq::TemperatureInitialValues<dim>(
               parameters.physical_constants.R0,
               parameters.physical_constants.R1),
@@ -390,7 +406,6 @@ namespace Standard
      * Setup the matrix and vector objects.
      */
     setup_nse_matrices(nse_partitioning, nse_relevant_partitioning);
-    setup_nse_preconditioner(nse_partitioning, nse_relevant_partitioning);
 
     setup_temperature_matrices(temperature_partitioning,
                                temperature_relevant_partitioning);
@@ -412,151 +427,6 @@ namespace Standard
   }
 
 
-
-  /////////////////////////////////////////////////////////////
-  // Assembly NSE preconditioner
-  /////////////////////////////////////////////////////////////
-
-
-  template <int dim>
-  void
-  BoussinesqModel<dim>::local_assemble_nse_preconditioner(
-    const typename DoFHandler<dim>::active_cell_iterator &cell,
-    Assembly::Scratch::NSEPreconditioner<dim> &           scratch,
-    Assembly::CopyData::NSEPreconditioner<dim> &          data)
-  {
-    const unsigned int dofs_per_cell = nse_fe.dofs_per_cell;
-    const unsigned int n_q_points = scratch.nse_fe_values.n_quadrature_points;
-
-    const FEValuesExtractors::Vector velocities(0);
-    const FEValuesExtractors::Scalar pressure(dim);
-
-    const double one_over_reynolds_number =
-      (1. / CoreModelData::get_reynolds_number(
-              parameters.reference_quantities.velocity,
-              parameters.reference_quantities.length,
-              parameters.physical_constants.kinematic_viscosity));
-
-    scratch.nse_fe_values.reinit(cell);
-
-    cell->get_dof_indices(data.local_dof_indices);
-    data.local_matrix = 0;
-
-    for (unsigned int q = 0; q < n_q_points; ++q)
-      {
-        for (unsigned int k = 0; k < dofs_per_cell; ++k)
-          {
-            scratch.phi_u[k] = scratch.nse_fe_values[velocities].value(k, q);
-            scratch.grad_phi_u[k] =
-              scratch.nse_fe_values[velocities].gradient(k, q);
-            scratch.phi_p[k] = scratch.nse_fe_values[pressure].value(k, q);
-          }
-
-        for (unsigned int i = 0; i < dofs_per_cell; ++i)
-          for (unsigned int j = 0; j < dofs_per_cell; ++j)
-            data.local_matrix(i, j) +=
-              (scratch.phi_u[i] * scratch.phi_u[j] +
-               parameters.time_step * one_over_reynolds_number *
-                 scalar_product(scratch.grad_phi_u[i], scratch.grad_phi_u[j]) +
-               scratch.phi_p[i] * scratch.phi_p[j]) *
-              scratch.nse_fe_values.JxW(q);
-      }
-  }
-
-
-
-  template <int dim>
-  void
-  BoussinesqModel<dim>::copy_local_to_global_nse_preconditioner(
-    const Assembly::CopyData::NSEPreconditioner<dim> &data)
-  {
-    nse_constraints.distribute_local_to_global(data.local_matrix,
-                                               data.local_dof_indices,
-                                               nse_preconditioner_matrix);
-  }
-
-
-  template <int dim>
-  void
-  BoussinesqModel<dim>::assemble_nse_preconditioner(const double time_index)
-  {
-    TimerOutput::Scope timer_section(this->computing_timer,
-                                     "   Assembly NSE preconditioner");
-
-    nse_preconditioner_matrix = 0;
-    const QGauss<dim> quadrature_formula(parameters.nse_velocity_degree + 1);
-    using CellFilter =
-      FilteredIterator<typename DoFHandler<dim>::active_cell_iterator>;
-
-    WorkStream::run(
-      CellFilter(IteratorFilters::LocallyOwnedCell(),
-                 nse_dof_handler.begin_active()),
-      CellFilter(IteratorFilters::LocallyOwnedCell(), nse_dof_handler.end()),
-      std::bind(&BoussinesqModel<dim>::local_assemble_nse_preconditioner,
-                this,
-                std::placeholders::_1,
-                std::placeholders::_2,
-                std::placeholders::_3),
-      std::bind(&BoussinesqModel<dim>::copy_local_to_global_nse_preconditioner,
-                this,
-                std::placeholders::_1),
-      Assembly::Scratch::NSEPreconditioner<dim>(parameters.time_step,
-                                                time_index,
-                                                nse_fe,
-                                                quadrature_formula,
-                                                mapping,
-                                                update_JxW_values |
-                                                  update_values |
-                                                  update_gradients),
-      Assembly::CopyData::NSEPreconditioner<dim>(nse_fe));
-
-    nse_preconditioner_matrix.compress(VectorOperation::add);
-  }
-
-
-
-  template <int dim>
-  void
-  BoussinesqModel<dim>::build_nse_preconditioner(const double time_index)
-  {
-    TimerOutput::Scope timer_section(this->computing_timer,
-                                     "   Build NSE preconditioner");
-
-    this->pcout
-      << "   Assembling and building Navier-Stokes block preconditioner..."
-      << std::flush;
-
-    assemble_nse_preconditioner(time_index);
-
-    Mp_preconditioner = std::make_shared<Block_11_PreconType>();
-    typename Block_11_PreconType::AdditionalData Mp_preconditioner_data;
-    Mp_preconditioner->initialize(nse_preconditioner_matrix.block(1, 1),
-                                  Mp_preconditioner_data);
-
-
-    std::vector<std::vector<bool>> constant_modes_velocity;
-    FEValuesExtractors::Vector     velocity_components(0);
-    DoFTools::extract_constant_modes(nse_dof_handler,
-                                     nse_fe.component_mask(velocity_components),
-                                     constant_modes_velocity);
-    Amg_preconditioner = std::make_shared<Block_00_PreconType>();
-    typename Block_00_PreconType::AdditionalData Amg_data;
-    /*
-     * This is relevant to AMG preconditioners
-     */
-    Amg_data.constant_modes        = constant_modes_velocity;
-    Amg_data.elliptic              = true;
-    Amg_data.higher_order_elements = true;
-    Amg_data.smoother_sweeps       = 1;
-    Amg_data.aggregation_threshold = 0.02;
-    Amg_preconditioner->initialize(nse_preconditioner_matrix.block(0, 0),
-                                   Amg_data);
-
-    this->pcout << std::endl;
-  }
-
-
-
   /////////////////////////////////////////////////////////////
   // Assembly NSE system
   /////////////////////////////////////////////////////////////
@@ -572,8 +442,9 @@ namespace Standard
       scratch.nse_fe_values.get_fe().dofs_per_cell;
     const unsigned int n_q_points = scratch.nse_fe_values.n_quadrature_points;
 
-    const FEValuesExtractors::Vector velocities(0);
-    const FEValuesExtractors::Scalar pressure(dim);
+    const FEValuesExtractors::Vector vorticity(0);
+    const FEValuesExtractors::Vector velocities(dim);
+    const FEValuesExtractors::Scalar pressure(2 * dim);
 
     const double one_over_reynolds_number =
       (1. / CoreModelData::get_reynolds_number(
@@ -594,13 +465,15 @@ namespace Standard
     data.local_matrix = 0;
     data.local_rhs    = 0;
 
+    /*
+     * Get some values at the previous time step
+     */
     scratch.temperature_fe_values.get_function_values(
       old_temperature_solution, scratch.old_temperature_values);
-
+    scratch.nse_fe_values[vorticity].get_function_values(
+      old_nse_solution, scratch.old_vorticity_values);
     scratch.nse_fe_values[velocities].get_function_values(
       old_nse_solution, scratch.old_velocity_values);
-    scratch.nse_fe_values[velocities].get_function_gradients(
-      old_nse_solution, scratch.old_velocity_grads);
 
     for (unsigned int q = 0; q < n_q_points; ++q)
       {
@@ -609,16 +482,16 @@ namespace Standard
           parameters.physical_constants.density,
           old_temperature,
           parameters.reference_quantities.temperature_ref);
-        const Tensor<1, dim> old_velocity = scratch.old_velocity_values[q];
-        const Tensor<2, dim> old_velocity_grads =
-          transpose(scratch.old_velocity_grads[q]);
+        const Tensor<1, dim> old_vorticity = scratch.old_vorticity_values[q];
+        const Tensor<1, dim> old_velocity  = scratch.old_velocity_values[q];
 
         for (unsigned int k = 0; k < dofs_per_cell; ++k)
           {
-            scratch.phi_u[k] = scratch.nse_fe_values[velocities].value(k, q);
+            scratch.phi_w[k] = scratch.nse_fe_values[vorticity].value(k, q);
 
-            scratch.grads_phi_u[k] = transpose(
-              scratch.nse_fe_values[velocities].symmetric_gradient(k, q));
+            scratch.curl_phi_w[k] = scratch.nse_fe_values[vorticity].curl(k, q);
+
+            scratch.phi_u[k] = scratch.nse_fe_values[velocities].value(k, q);
 
             scratch.div_phi_u[k] =
               scratch.nse_fe_values[velocities].divergence(k, q);
@@ -640,16 +513,21 @@ namespace Standard
         for (unsigned int i = 0; i < dofs_per_cell; ++i)
           for (unsigned int j = 0; j < dofs_per_cell; ++j)
             data.local_matrix(i, j) +=
-              (scratch.phi_u[i] * scratch.phi_u[j] // mass term
-               + parameters.time_step *
-                   (one_over_reynolds_number * 2 * scratch.grads_phi_u[i] *
-                    scratch.grads_phi_u[j]) // eps(v):sigma(eps(u))
+              (scratch.phi_w[i] * scratch.phi_w[j] // mass_w term block(0,0)
+               -
+               scratch.curl_phi_w[i] * scratch.phi_u[j] // rot_w term block(0,1)
+               + scratch.phi_u[i] * scratch.phi_u[j] // mass_u term block(1,1)
+               + parameters.time_step * one_over_reynolds_number *
+                   (scratch.phi_u[i] * scratch.curl_phi_w[j] +
+                    scratch.div_phi_u[i] *
+                      scratch.div_phi_u[j]) // 1/Re * v * curl(w) block(1,0)
                - (scratch.div_phi_u[i] *
-                  scratch.phi_p[j]) // div(v)*p (solve for scaled pressure dt*p)
-               - (scratch.phi_p[i] * scratch.div_phi_u[j]) // q*div(u)
+                  scratch
+                    .phi_p[j]) // div(v)*p ---> scaled pressure dt*p  block(1,2)
+               - (scratch.phi_p[i] *
+                  scratch.div_phi_u[j]) // q * div(u) block(2, 1)
                ) *
               scratch.nse_fe_values.JxW(q);
-
 
         const Tensor<1, dim> gravity =
           (parameters.reference_quantities.length /
@@ -670,18 +548,33 @@ namespace Standard
           data.local_rhs(i) +=
             (scratch.phi_u[i] * old_velocity +
              parameters.time_step * density_scaling * gravity * scratch.phi_u[i]
-             //             - parameters.time_step * scratch.phi_u[i] *
-             //               (old_velocity * old_velocity_grads) // advection
-             //               at previous time
-             //             - (dim == 2 ? -parameters.time_step * 2 *
-             //                             parameters.physical_constants.omega
-             //                             * scratch.phi_u[i] *
+             //             - parameters.time_step *
+             //               (scratch.div_phi_u[i] * 0.5 *
+             //                  scalar_product(old_velocity, old_velocity) +
+             //                scratch.phi_u[i] *
+             //                  //                  (dim == 2 ? old_vorticity *
+             //                  // cross_product_2d(old_velocity) :
+             //                  // cross_product_3d(
+             //                  // old_vorticity,
+             //                  // old_velocity))) // advection
+             //                  //                                at previous
+             //                  time cross_product_3d(
+             //                    old_velocity,
+             //                    old_vorticity)) // advection at previous time
+             //                    (only 3D)
+             //             - parameters.time_step *
+             //               (dim == 2 ? -2 *
+             //               parameters.physical_constants.omega *
+             //                             scratch.phi_u[i] *
              //                             cross_product_2d(old_velocity) :
-             //                           parameters.time_step * 2 *
-             //                           scratch.phi_u[i] *
+             //                           2 * scratch.phi_u[i] *
              //                             cross_product_3d(coriolis,
              //                                              old_velocity)) //
-             //                                              coriolis force)
+             //                                              coriolis force
+             //               2 * scratch.phi_u[i] *
+             //               cross_product_3d(coriolis,
+             //                                old_velocity) // coriolis force
+             //                                (only 3D)
              ) *
             scratch.nse_fe_values.JxW(q);
       }
@@ -722,7 +615,7 @@ namespace Standard
 
     nse_rhs = 0;
 
-    const QGauss<dim> quadrature_formula(parameters.nse_velocity_degree + 1);
+    const QGauss<dim> quadrature_formula(parameters.nse_velocity_degree + 2);
     using CellFilter =
       FilteredIterator<typename DoFHandler<dim>::active_cell_iterator>;
 
@@ -741,7 +634,7 @@ namespace Standard
       Assembly::Scratch::NSESystem<dim>(parameters.time_step,
                                         time_index,
                                         nse_fe,
-                                        mapping,
+                                        temperature_mapping,
                                         quadrature_formula,
                                         (update_values |
                                          update_quadrature_points |
@@ -869,7 +762,7 @@ namespace Standard
       Assembly::Scratch::TemperatureMatrix<dim>(parameters.time_step,
                                                 time_index,
                                                 temperature_fe,
-                                                mapping,
+                                                temperature_mapping,
                                                 quadrature_formula),
       Assembly::CopyData::TemperatureMatrix<dim>(temperature_fe));
 
@@ -900,7 +793,7 @@ namespace Standard
     const unsigned int n_q_points =
       scratch.temperature_fe_values.n_quadrature_points;
 
-    const FEValuesExtractors::Vector velocities(0);
+    const FEValuesExtractors::Vector velocities(1);
 
     data.local_rhs     = 0;
     data.matrix_for_bc = 0;
@@ -1027,7 +920,7 @@ namespace Standard
                                              time_index,
                                              temperature_fe,
                                              nse_fe,
-                                             mapping,
+                                             temperature_mapping,
                                              quadrature_formula),
       Assembly::CopyData::TemperatureRHS<dim>(temperature_fe));
 
@@ -1042,13 +935,13 @@ namespace Standard
   BoussinesqModel<dim>::get_maximal_velocity() const
   {
     const QIterated<dim> quadrature_formula(QTrapez<1>(),
-                                            parameters.nse_velocity_degree);
+                                            parameters.nse_velocity_degree + 1);
     const unsigned int   n_q_points = quadrature_formula.size();
 
-    FEValues<dim> fe_values(mapping, nse_fe, quadrature_formula, update_values);
+    FEValues<dim> fe_values(nse_fe, quadrature_formula, update_values);
     std::vector<Tensor<1, dim>> velocity_values(n_q_points);
 
-    const FEValuesExtractors::Vector velocities(0);
+    const FEValuesExtractors::Vector velocities(1);
     double                           max_local_velocity = 0;
 
     for (const auto &cell : nse_dof_handler.active_cell_iterators())
@@ -1073,10 +966,10 @@ namespace Standard
   BoussinesqModel<dim>::get_cfl_number() const
   {
     const QIterated<dim> quadrature_formula(QTrapez<1>(),
-                                            parameters.nse_velocity_degree);
+                                            parameters.nse_velocity_degree + 1);
     const unsigned int   n_q_points = quadrature_formula.size();
 
-    FEValues<dim> fe_values(mapping, nse_fe, quadrature_formula, update_values);
+    FEValues<dim> fe_values(nse_fe, quadrature_formula, update_values);
     std::vector<Tensor<1, dim>> velocity_values(n_q_points);
 
     const FEValuesExtractors::Vector velocities(0);
@@ -1144,7 +1037,7 @@ namespace Standard
          (timestep_number % parameters.NSE_solver_interval == 0)))
       {
         TimerOutput::Scope timer_section(this->computing_timer,
-                                         "   Solve Stokes system");
+                                         "   Solve NSE system");
         this->pcout
           << "   Solving Navier-Stokes system for one time step with (block preconditioned solver)... "
           << std::flush;
@@ -1155,13 +1048,19 @@ namespace Standard
          * We solved only for a scaled pressure to
          * keep the system symmetric. So transform now and rescale later.
          */
-        distributed_nse_solution.block(1) *= parameters.time_step;
+        distributed_nse_solution.block(2) *= parameters.time_step;
 
+        /*
+         * Set values at constrained local pressure dofs to zero in order not to
+         * bother the Schur complement solver with irrelevant values.
+         */
         const unsigned int
           start = (distributed_nse_solution.block(0).size() +
-                   distributed_nse_solution.block(1).local_range().first),
+                   distributed_nse_solution.block(1).size() +
+                   distributed_nse_solution.block(2).local_range().first),
           end   = (distributed_nse_solution.block(0).size() +
-                 distributed_nse_solution.block(1).local_range().second);
+                 distributed_nse_solution.block(1).size() +
+                 distributed_nse_solution.block(2).local_range().second);
 
         for (unsigned int i = start; i < end; ++i)
           if (nse_constraints.is_constrained(i))
@@ -1170,75 +1069,160 @@ namespace Standard
         PrimitiveVectorMemory<LA::MPI::BlockVector> mem;
         unsigned int                                n_iterations = 0;
         const double  solver_tolerance = 1e-8 * nse_rhs.l2_norm();
-        SolverControl solver_control(30, solver_tolerance);
+        SolverControl solver_control(50000, solver_tolerance);
 
-        /*
-         * We have only the actual pressure but need
-         * to solve for a scaled pressure to keep the
-         * system symmetric. Hence for the initial guess
-         * we need to transform to the rescaled version.
-         */
-        distributed_nse_solution.block(1) *= parameters.time_step;
+        //          try
+        {
+          const LinearAlgebra::PreconditionerBlockIdentity preconditioner;
 
-        try
-          {
-            const LinearAlgebra::BlockSchurPreconditioner<Block_00_PreconType,
-                                                          Block_11_PreconType>
-              preconditioner(nse_matrix,
-                             nse_preconditioner_matrix,
-                             *Mp_preconditioner,
-                             *Amg_preconditioner,
-                             false);
+          SolverFGMRES<LA::MPI::BlockVector> solver(
+            solver_control,
+            mem,
+            SolverFGMRES<LA::MPI::BlockVector>::AdditionalData(100));
 
-            SolverFGMRES<LA::MPI::BlockVector> solver(
-              solver_control,
-              mem,
-              SolverFGMRES<LA::MPI::BlockVector>::AdditionalData(30));
+          solver.solve(nse_matrix,
+                       distributed_nse_solution,
+                       nse_rhs,
+                       preconditioner);
 
-            solver.solve(nse_matrix,
-                         distributed_nse_solution,
-                         nse_rhs,
-                         preconditioner);
-
-            n_iterations = solver_control.last_step();
-          }
-        catch (SolverControl::NoConvergence &)
-          {
-            const LinearAlgebra::BlockSchurPreconditioner<Block_00_PreconType,
-                                                          Block_11_PreconType>
-              preconditioner(nse_matrix,
-                             nse_preconditioner_matrix,
-                             *Mp_preconditioner,
-                             *Amg_preconditioner,
-                             true);
-
-            SolverControl solver_control_refined(nse_matrix.m(),
-                                                 solver_tolerance);
-
-            SolverFGMRES<LA::MPI::BlockVector> solver(
-              solver_control_refined,
-              mem,
-              SolverFGMRES<LA::MPI::BlockVector>::AdditionalData(50));
-
-            solver.solve(nse_matrix,
-                         distributed_nse_solution,
-                         nse_rhs,
-                         preconditioner);
-
-            n_iterations =
-              (solver_control.last_step() + solver_control_refined.last_step());
-          }
+          n_iterations = solver_control.last_step();
+        }
+        //          catch (SolverControl::NoConvergence &)
+        //            {
+        //              const
+        //              LinearAlgebra::BlockSchurPreconditioner<Block_00_PreconType,
+        //                                                            Block_11_PreconType>
+        //                preconditioner(nse_matrix,
+        //                               nse_preconditioner_matrix,
+        //                               *Mp_preconditioner,
+        //                               *Amg_preconditioner,
+        //                               true);
+        //
+        //              SolverControl solver_control_refined(nse_matrix.m(),
+        //                                                   solver_tolerance);
+        //
+        //              SolverFGMRES<LA::MPI::BlockVector> solver(
+        //                solver_control_refined,
+        //                mem,
+        //                SolverFGMRES<LA::MPI::BlockVector>::AdditionalData(
+        //                  50));
+        //
+        //              solver.solve(nse_matrix,
+        //                           distributed_nse_solution,
+        //                           nse_rhs,
+        //                           preconditioner);
+        //
+        //              n_iterations =
+        //                (solver_control.last_step() +
+        //                solver_control_refined.last_step());
+        //            }
         nse_constraints.distribute(distributed_nse_solution);
 
         /*
          * We solved only for a scaled pressure to
          * keep the system symmetric. So retransform.
          */
-        distributed_nse_solution.block(1) /= parameters.time_step;
+        distributed_nse_solution.block(2) /= parameters.time_step;
 
         nse_solution = distributed_nse_solution;
 
         this->pcout << n_iterations << " iterations." << std::endl;
+      } // solver time intervall constraint
+  }
+
+
+  template <int dim>
+  void
+  BoussinesqModel<dim>::solve_NSE_Schur_complement_compressible()
+  {
+    if ((timestep_number == 0) ||
+        ((timestep_number > 0) &&
+         (timestep_number % parameters.NSE_solver_interval == 0)))
+      {
+        TimerOutput::Scope timer_section(this->computing_timer,
+                                         "   Solve NSE system");
+        this->pcout
+          << "   Solving compressible Navier-Stokes system for one time step... "
+          << std::flush;
+
+        /*
+         * Prepare vectors
+         */
+        LA::MPI::BlockVector nse_local_rhs;
+
+        nse_local_rhs.reinit(nse_partitioning, this->mpi_communicator);
+
+        LA::MPI::BlockVector distributed_nse_solution(nse_rhs);
+        distributed_nse_solution = nse_solution;
+
+        /*
+         * Initialize the preconditioner of the mass matrix in H(curl).
+         */
+        using Mw_InnerPerconditionerType =
+          typename LinearAlgebra::InnerSchurPreconditioner::type;
+        Mw_schur_preconditioner =
+          std::make_shared<Mw_InnerPerconditionerType>();
+        // Fill preconditioner with life
+        Mw_schur_preconditioner->initialize(nse_matrix.block(0, 0), data);
+
+        using Mw_InverseType =
+          LinearAlgebra::InverseMatrix<LA::SparseMatrix,
+                                       Mw_InnerPerconditionerType>;
+        const Mw_InverseType Mw_inverse(nse_matrix.block(0, 0),
+                                        *Mw_schur_preconditioner,
+                                        /* use_simple_cg */ true);
+
+        LinearAlgebra::ShiftedSchurComplement<LA::BlockSparseMatrix,
+                                              LA::MPI::Vector,
+                                              Mw_InverseType>
+          Mu_minus_Sw(nse_matrix,
+                      Mw_inverse,
+                      nse_partitioning,
+                      this->mpi_communicator);
+
+        using Mu_minus_Sw_PreconditionerType = LA::PreconditionJacobi;
+        Mu_minus_Sw_PreconditionerType Mu_minus_Sw_preconditioner;
+        Mu_minus_Sw_preconditioner.initialize(nse_matrix.block(1, 1));
+
+        using Mu_minus_Sw_InverseType = LinearAlgebra::InverseMatrix<
+          LinearAlgebra::ShiftedSchurComplement<LA::BlockSparseMatrix,
+                                                LA::MPI::Vector,
+                                                Mw_InverseType>,
+          Mu_minus_Sw_PreconditionerType>;
+        Mu_minus_Sw_InverseType Mu_minus_Sw_inverse(Mu_minus_Sw,
+                                                    Mu_minus_Sw_preconditioner,
+                                                    /* use_simple_cg */ true);
+
+        {
+          TimerOutput::Scope t(
+            this->computing_timer,
+            "      Solve NSE system - inner CG solver (for w and u)");
+
+          this->pcout << "      Apply inner CG solver (for w and u)..."
+                      << std::endl;
+
+          Mu_minus_Sw_inverse.vmult(distributed_nse_solution.block(1),
+                                    nse_rhs.block(1));
+
+          nse_constraints.distribute(distributed_nse_solution);
+
+          // tmp of size block(0)
+          LA::MPI::Vector tmp_0(nse_partitioning[0], this->mpi_communicator);
+
+          nse_matrix.block(0, 1).vmult(tmp_0,
+                                       distributed_nse_solution.block(1));
+          Mw_inverse.vmult(distributed_nse_solution.block(0), tmp_0);
+          distributed_nse_solution.block(0) *= -1;
+
+          nse_constraints.distribute(distributed_nse_solution);
+
+          this->pcout << "      Inner CG solver (for w and u) completed."
+                      << std::endl
+                      << std::endl;
+        } // solve for w
+
+        nse_solution = distributed_nse_solution;
+
       } // solver time intervall constraint
   }
 
@@ -1258,123 +1242,134 @@ namespace Standard
           << std::endl;
 
         /*
-         * Initialize the inner preconditioner.
+         * Prepare vectors
          */
-        inner_schur_preconditioner =
-          std::make_shared<InnerPreconditionerType>();
-
-        // Fill preconditioner with life
-        inner_schur_preconditioner->initialize(nse_matrix.block(0, 0), data);
-
-        using BlockInverseType =
-          LinearAlgebra::InverseMatrix<LA::SparseMatrix,
-                                       InnerPreconditionerType>;
-        const BlockInverseType block_inverse(nse_matrix.block(0, 0),
-                                             *inner_schur_preconditioner);
-
         LA::MPI::BlockVector distributed_nse_solution(nse_rhs);
         distributed_nse_solution = nse_solution;
-
         /*
          * We solved only for a scaled pressure to
          * keep the system symmetric. So transform now and rescale later.
          */
-        distributed_nse_solution.block(1) *= parameters.time_step;
+        distributed_nse_solution.block(2) *= parameters.time_step;
 
+        /*
+         * Set values at constrained local pressure dofs to zero in order not to
+         * bother the Schur complement solver with irrelevant values.
+         */
         const unsigned int
           start = (distributed_nse_solution.block(0).size() +
-                   distributed_nse_solution.block(1).local_range().first),
+                   distributed_nse_solution.block(1).size() +
+                   distributed_nse_solution.block(2).local_range().first),
           end   = (distributed_nse_solution.block(0).size() +
-                 distributed_nse_solution.block(1).local_range().second);
+                 distributed_nse_solution.block(1).size() +
+                 distributed_nse_solution.block(2).local_range().second);
 
         for (unsigned int i = start; i < end; ++i)
           if (nse_constraints.is_constrained(i))
             distributed_nse_solution(i) = 0;
 
-        // tmp of size block(0)
-        LA::MPI::Vector tmp(nse_partitioning[0], this->mpi_communicator);
+        /*
+         * Initialize the preconditioner of the mass matrix in H(curl).
+         */
+        using Mw_InnerPerconditionerType =
+          typename LinearAlgebra::InnerSchurPreconditioner::type;
+        Mw_schur_preconditioner =
+          std::make_shared<Mw_InnerPerconditionerType>();
+        // Fill preconditioner with life
+        Mw_schur_preconditioner->initialize(nse_matrix.block(0, 0), data);
 
-        // Set up Schur complement
-        LinearAlgebra::SchurComplement<LA::BlockSparseMatrix,
-                                       LA::MPI::Vector,
-                                       BlockInverseType>
-          schur_complement(nse_matrix,
-                           block_inverse,
-                           nse_partitioning,
-                           this->mpi_communicator);
+        using Mw_InverseType =
+          LinearAlgebra::InverseMatrix<LA::SparseMatrix,
+                                       Mw_InnerPerconditionerType>;
+        const Mw_InverseType Mw_inverse(nse_matrix.block(0, 0),
+                                        *Mw_schur_preconditioner,
+                                        /* use_simple_cg */ true);
 
-        // Compute schur_rhs = -g + C*A^{-1}*f
-        LA::MPI::Vector schur_rhs(nse_partitioning[1], this->mpi_communicator);
+        /*
+         * Set up shifted Schur complement w.r.t. Mw, i.e.,
+         * Sw = Mu - Ru*Mw_inverse*Rw
+         */
+        LinearAlgebra::ShiftedSchurComplement<LA::BlockSparseMatrix,
+                                              LA::MPI::Vector,
+                                              Mw_InverseType>
+          Mu_minus_Sw(nse_matrix,
+                      Mw_inverse,
+                      nse_partitioning,
+                      this->mpi_communicator);
 
-        this->pcout
-          << std::endl
-          << "      Apply inverse of block (0,0) for Schur complement solver RHS..."
-          << std::endl;
+        //        using Mu_minus_Sw_PreconditionerType =
+        //        LA::PreconditionIdentity; Mu_minus_Sw_PreconditionerType
+        //        Mu_minus_Sw_preconditioner;
 
-        block_inverse.vmult(tmp, nse_rhs.block(0));
-        nse_matrix.block(1, 0).vmult(schur_rhs, tmp);
-        schur_rhs -= nse_rhs.block(1);
+        using Mu_minus_Sw_PreconditionerType = LA::PreconditionJacobi;
+        Mu_minus_Sw_PreconditionerType Mu_minus_Sw_preconditioner;
+        Mu_minus_Sw_preconditioner.initialize(nse_matrix.block(1, 1));
 
-        this->pcout << "      Schur complement solver RHS computation done..."
-                    << std::endl
-                    << std::endl;
+        using Mu_minus_Sw_InverseType = LinearAlgebra::InverseMatrix<
+          LinearAlgebra::ShiftedSchurComplement<LA::BlockSparseMatrix,
+                                                LA::MPI::Vector,
+                                                Mw_InverseType>,
+          Mu_minus_Sw_PreconditionerType>;
+        Mu_minus_Sw_InverseType Mu_minus_Sw_inverse(Mu_minus_Sw,
+                                                    Mu_minus_Sw_preconditioner,
+                                                    /* use_simple_cg */ true);
 
         {
           TimerOutput::Scope t(
             this->computing_timer,
             "      Solve NSE system - Schur complement solver (for pressure)");
 
-          this->pcout << "      Apply Schur complement solver..." << std::endl;
+          // tmp of size block(1)
+          LA::MPI::Vector tmp_1(nse_partitioning[1], this->mpi_communicator);
 
-          // Set Solver parameters for solving for u
-          SolverControl                solver_control(nse_matrix.m(),
-                                       1e-6 * schur_rhs.l2_norm());
-          SolverGMRES<LA::MPI::Vector> schur_solver(solver_control);
+          // Compute schur_rhs = B*Mu_minus_Sw_inverse*f
+          LA::MPI::Vector schur_rhs(nse_partitioning[2],
+                                    this->mpi_communicator);
+
+          this->pcout
+            << std::endl
+            << "      Prepare RHS for nested inverse Schur complement solver (for p)..."
+            << std::endl;
+
+          Mu_minus_Sw_inverse.vmult(tmp_1, nse_rhs.block(1));
+          nse_matrix.block(2, 1).vmult(schur_rhs, tmp_1);
+
+          this->pcout
+            << "      RHS computation for nested Schur complement solver (for p) done..."
+            << std::endl
+            << std::endl;
+
+          this->pcout << "      Apply Schur complement solver (for p)..."
+                      << std::endl;
 
           /*
-           * Precondition the Schur complement with
-           * the approximate inverse of an approximate
-           * Schur complement.
+           * Build nested Schur complement
            */
-          using ApproxSchurComplementType =
-            LinearAlgebra::ApproximateSchurComplement<LA::BlockSparseMatrix,
-                                                      LA::MPI::Vector,
-                                                      LA::PreconditionILU>;
-          ApproxSchurComplementType approx_schur(nse_matrix,
-                                                 nse_partitioning,
-                                                 this->mpi_communicator);
+          using NestedSchur_PreconditionerType = LA::PreconditionIdentity;
+          NestedSchur_PreconditionerType
+            nested_schur_Mu_minus_Sw_preconditioner;
+          LinearAlgebra::NestedSchurComplement<LA::BlockSparseMatrix,
+                                               LA::MPI::Vector,
+                                               Mu_minus_Sw_InverseType>
+            nested_schur_Mu_minus_Sw(nse_matrix,
+                                     Mu_minus_Sw_inverse,
+                                     nse_partitioning,
+                                     this->mpi_communicator);
 
-          using ApproxSchurComplementPreconditionerType =
-            LA::PreconditionIdentity;
-          ApproxSchurComplementPreconditionerType
-            approx_schur_comp_preconditioner;
-#ifdef DEBUG
-          LinearAlgebra::ApproximateInverseMatrix<
-            ApproxSchurComplementType,
-            ApproxSchurComplementPreconditionerType>
-            preconditioner_for_schur_solver(
-              approx_schur,
-              approx_schur_comp_preconditioner,
-              /* n_iter */ numbers::invalid_unsigned_int);
-#else
-          LinearAlgebra::ApproximateInverseMatrix<
-            ApproxSchurComplementType,
-            ApproxSchurComplementPreconditionerType>
-            preconditioner_for_schur_solver(
-              approx_schur,
-              approx_schur_comp_preconditioner,
-              /* n_iter */ numbers::invalid_unsigned_int);
-#endif
+          // Set Solver parameters for solving for p
+          SolverControl             solver_control(nse_matrix.m(),
+                                       1e-6 * schur_rhs.l2_norm());
+          SolverCG<LA::MPI::Vector> schur_solver(solver_control);
 
-          schur_solver.solve(schur_complement,
-                             distributed_nse_solution.block(1),
+          schur_solver.solve(nested_schur_Mu_minus_Sw,
+                             distributed_nse_solution.block(2),
                              schur_rhs,
-                             preconditioner_for_schur_solver);
+                             nested_schur_Mu_minus_Sw_preconditioner);
 
-          this->pcout << "      Iterative Schur complement solver converged in "
-                      << solver_control.last_step() << " iterations."
-                      << std::endl
-                      << std::endl;
+          this->pcout
+            << "      Iterative nested Schur complement solver (for p) converged in "
+            << solver_control.last_step() << " iterations." << std::endl
+            << std::endl;
 
           nse_constraints.distribute(distributed_nse_solution);
         } // solve for pressure
@@ -1382,33 +1377,58 @@ namespace Standard
         {
           TimerOutput::Scope t(
             this->computing_timer,
-            "      Solve NSE system - outer CG solver (for u)");
+            "      Solve NSE system - outer Schur complement solver (for u)");
 
           this->pcout << "      Apply outer solver..." << std::endl;
 
-          // use computed u to solve for sigma
-          nse_matrix.block(0, 1).vmult(tmp, distributed_nse_solution.block(1));
-          tmp *= -1;
-          tmp += nse_rhs.block(0);
+          // tmp of size block(1)
+          LA::MPI::Vector tmp_1(nse_partitioning[1], this->mpi_communicator);
 
-          // Solve for velocity
-          block_inverse.vmult(distributed_nse_solution.block(0), tmp);
+          nse_matrix.block(1, 2).vmult(tmp_1,
+                                       distributed_nse_solution.block(2));
+          tmp_1 *= -1;
+          tmp_1 += nse_rhs.block(1);
 
-          this->pcout << "      Outer solver completed." << std::endl
+          // Solve for u
+          Mu_minus_Sw_inverse.vmult(distributed_nse_solution.block(1), tmp_1);
+
+          this->pcout << "      Schur complement solver (for u) completed."
+                      << std::endl
                       << std::endl;
 
           nse_constraints.distribute(distributed_nse_solution);
+        } // solve for u
 
-          /*
-           * We solved only for a scaled pressure to
-           * keep the system symmetric. So retransform.
-           */
-          distributed_nse_solution.block(1) /= parameters.time_step;
+        {
+          TimerOutput::Scope t(
+            this->computing_timer,
+            "      Solve NSE system - inner CG solver (for w)");
 
-          nse_solution = distributed_nse_solution;
+          this->pcout << "      Apply inner CG solver (for w)..." << std::endl;
 
-        } // solve for velocity
-      }   // solver time intervall constraint
+          // tmp of size block(0)
+          LA::MPI::Vector tmp_0(nse_partitioning[0], this->mpi_communicator);
+
+          nse_matrix.block(0, 1).vmult(tmp_0,
+                                       distributed_nse_solution.block(1));
+          Mw_inverse.vmult(distributed_nse_solution.block(0), tmp_0);
+
+          distributed_nse_solution.block(0) *= -1;
+
+          this->pcout << "      Inner CG solver (for w) completed." << std::endl
+                      << std::endl;
+
+          nse_constraints.distribute(distributed_nse_solution);
+        } // solve for w
+
+        /*
+         * We solved only for a scaled pressure to
+         * keep the system symmetric. So retransform.
+         */
+        distributed_nse_solution.block(2) /= parameters.time_step;
+
+        nse_solution = distributed_nse_solution;
+      } // solver time intervall constraint
   }
 
 
@@ -1443,7 +1463,7 @@ namespace Standard
                 << " CG iterations for temperature" << std::endl;
 
     /*
-     * Compute global max and min temerature. Needs MPI communication.
+     * Compute global max and min temperature. Needs MPI communication.
      */
     double temperature[2] = {std::numeric_limits<double>::max(),
                              -std::numeric_limits<double>::max()};
@@ -1475,7 +1495,6 @@ namespace Standard
   // Postprocessor
   /////////////////////////////////////////////////////////////
 
-
   template <int dim>
   BoussinesqModel<dim>::Postprocessor::Postprocessor(
     const unsigned int partition)
@@ -1488,10 +1507,15 @@ namespace Standard
   std::vector<std::string>
   BoussinesqModel<dim>::Postprocessor::get_names() const
   {
-    std::vector<std::string> solution_names(dim, "velocity");
+    std::vector<std::string> solution_names(dim, "vorticity");
+    for (unsigned int d = dim; d < 2 * dim; ++d)
+      {
+        solution_names.emplace_back("velocity");
+      }
     solution_names.emplace_back("p");
     solution_names.emplace_back("T");
     solution_names.emplace_back("partition");
+
     return solution_names;
   }
 
@@ -1501,11 +1525,26 @@ namespace Standard
   std::vector<DataComponentInterpretation::DataComponentInterpretation>
   BoussinesqModel<dim>::Postprocessor::get_data_component_interpretation() const
   {
+    // vorticity
     std::vector<DataComponentInterpretation::DataComponentInterpretation>
       interpretation(dim,
                      DataComponentInterpretation::component_is_part_of_vector);
+
+    // velocity
+    interpretation.push_back(
+      DataComponentInterpretation::component_is_part_of_vector);
+    interpretation.push_back(
+      DataComponentInterpretation::component_is_part_of_vector);
+    interpretation.push_back(
+      DataComponentInterpretation::component_is_part_of_vector);
+
+    // pressure
     interpretation.push_back(DataComponentInterpretation::component_is_scalar);
+
+    // temperature
     interpretation.push_back(DataComponentInterpretation::component_is_scalar);
+
+    // partition
     interpretation.push_back(DataComponentInterpretation::component_is_scalar);
 
     return interpretation;
@@ -1534,7 +1573,7 @@ namespace Standard
            ExcInternalError());
     Assert(computed_quantities.size() == n_quadrature_points,
            ExcInternalError());
-    Assert(inputs.solution_values[0].size() == dim + 2, ExcInternalError());
+    Assert(inputs.solution_values[0].size() == 2 * dim + 2, ExcInternalError());
 
     /*
      * TODO: Rescale to physical quantities here.
@@ -1544,13 +1583,16 @@ namespace Standard
         for (unsigned int d = 0; d < dim; ++d)
           computed_quantities[q](d) = inputs.solution_values[q](d);
 
-        const double pressure       = (inputs.solution_values[q](dim));
-        computed_quantities[q](dim) = pressure;
+        for (unsigned int d = dim; d < 2 * dim; ++d)
+          computed_quantities[q](d) = inputs.solution_values[q](d);
 
-        const double temperature        = inputs.solution_values[q](dim + 1);
-        computed_quantities[q](dim + 1) = temperature;
+        const double pressure           = (inputs.solution_values[q](2 * dim));
+        computed_quantities[q](2 * dim) = pressure;
 
-        computed_quantities[q](dim + 2) = partition;
+        const double temperature = inputs.solution_values[q](2 * dim + 1);
+        computed_quantities[q](2 * dim + 1) = temperature;
+
+        computed_quantities[q](2 * dim + 2) = partition;
       }
   }
 
@@ -1607,30 +1649,38 @@ namespace Standard
             temperature_cell->get_dof_indices(local_temperature_dof_indices);
 
             for (unsigned int i = 0; i < joint_fe.dofs_per_cell; ++i)
-              if (joint_fe.system_to_base_index(i).first.first == 0)
-                {
-                  Assert(joint_fe.system_to_base_index(i).second <
-                           local_nse_dof_indices.size(),
-                         ExcInternalError());
+              {
+                /*
+                 * A vorticity/velocity/pressure dof
+                 */
+                if (joint_fe.system_to_base_index(i).first.first == 0)
+                  {
+                    Assert(joint_fe.system_to_base_index(i).second <
+                             local_nse_dof_indices.size(),
+                           ExcInternalError());
 
-                  joint_solution(local_joint_dof_indices[i]) = nse_solution(
-                    local_nse_dof_indices[joint_fe.system_to_base_index(i)
-                                            .second]);
-                }
-              else
-                {
-                  Assert(joint_fe.system_to_base_index(i).first.first == 1,
-                         ExcInternalError());
-                  Assert(joint_fe.system_to_base_index(i).second <
-                           local_temperature_dof_indices.size(),
-                         ExcInternalError());
+                    joint_solution(local_joint_dof_indices[i]) = nse_solution(
+                      local_nse_dof_indices[joint_fe.system_to_base_index(i)
+                                              .second]);
+                  }
+                /*
+                 * A temperature dof
+                 */
+                else
+                  {
+                    Assert(joint_fe.system_to_base_index(i).first.first == 1,
+                           ExcInternalError());
+                    Assert(joint_fe.system_to_base_index(i).second <
+                             local_temperature_dof_indices.size(),
+                           ExcInternalError());
 
-                  joint_solution(local_joint_dof_indices[i]) =
-                    temperature_solution(
-                      local_temperature_dof_indices
-                        [joint_fe.system_to_base_index(i).second]);
-                }
-          } // end if is_locally_owned()
+                    joint_solution(local_joint_dof_indices[i]) =
+                      temperature_solution(
+                        local_temperature_dof_indices
+                          [joint_fe.system_to_base_index(i).second]);
+                  }
+              }
+          } // namespace ExteriorCalculus
     }       // end for ++joint_cell
 
     joint_solution.compress(VectorOperation::insert);
@@ -1845,9 +1895,6 @@ namespace Standard
         if (timestep_number == 0)
           {
             assemble_nse_system(time_index);
-
-            if (!parameters.use_schur_complement_solver)
-              build_nse_preconditioner(time_index);
           }
         else if ((timestep_number > 0) &&
                  (timestep_number % parameters.NSE_solver_interval == 0))
@@ -1855,9 +1902,6 @@ namespace Standard
             recompute_time_step();
 
             assemble_nse_system(time_index);
-
-            if (!parameters.use_schur_complement_solver)
-              build_nse_preconditioner(time_index);
           }
 
         assemble_temperature_matrix(time_index);
@@ -1881,6 +1925,8 @@ namespace Standard
           {
             solve_NSE_block_preconditioned();
           }
+
+        //        solve_NSE_Schur_complement_compressible();
 
         solve_temperature();
 
@@ -1906,6 +1952,6 @@ namespace Standard
     while (time_index <= parameters.final_time);
   }
 
-} // namespace Standard
+} // namespace ExteriorCalculus
 
 DYCOREPLANET_CLOSE_NAMESPACE

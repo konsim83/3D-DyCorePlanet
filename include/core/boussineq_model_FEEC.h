@@ -16,9 +16,9 @@
 #include <deal.II/dofs/dof_renumbering.h>
 #include <deal.II/dofs/dof_tools.h>
 
-#include <deal.II/fe/fe_dgp.h>
 #include <deal.II/fe/fe_dgq.h>
-#include <deal.II/fe/fe_q.h>
+#include <deal.II/fe/fe_nedelec.h>
+#include <deal.II/fe/fe_raviart_thomas.h>
 #include <deal.II/fe/fe_system.h>
 #include <deal.II/fe/fe_values.h>
 #include <deal.II/fe/mapping_q.h>
@@ -52,6 +52,7 @@
 
 
 // STL
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <limits>
@@ -64,14 +65,16 @@
 // AquaPlanet
 #include <base/config.h>
 #include <base/utilities.h>
-#include <core/boussineq_model_assembly.h>
+#include <core/boussineq_model_assembly_FEEC.h>
 #include <core/planet_geometry.h>
 #include <linear_algebra/approximate_inverse.hpp>
 #include <linear_algebra/approximate_schur_complement.hpp>
-#include <linear_algebra/block_schur_preconditioner.hpp>
 #include <linear_algebra/inverse_matrix.hpp>
+#include <linear_algebra/nested_schur_complement.hpp>
 #include <linear_algebra/preconditioner.h>
+#include <linear_algebra/preconditioner_block_identity.h>
 #include <linear_algebra/schur_complement.hpp>
+#include <linear_algebra/shifted_schur_complement.hpp>
 #include <model_data/boussinesq_model_data.h>
 #include <model_data/boussinesq_model_parameters.h>
 #include <model_data/core_model_data.h>
@@ -79,7 +82,7 @@
 
 DYCOREPLANET_OPEN_NAMESPACE
 
-namespace Standard
+namespace ExteriorCalculus
 {
   /*!
    * @class BoussinesqModel
@@ -155,20 +158,9 @@ namespace Standard
                        const std::vector<IndexSet> &nse_relevant_partitioning);
 
     void
-    setup_nse_preconditioner(
-      const std::vector<IndexSet> &nse_partitioning,
-      const std::vector<IndexSet> &nse_relevant_partitioning);
-
-    void
     setup_temperature_matrices(
       const IndexSet &temperature_partitioning,
       const IndexSet &temperature_relevant_partitioning);
-
-    void
-    assemble_nse_preconditioner(const double time_index);
-
-    void
-    build_nse_preconditioner(const double time_index);
 
     void
     assemble_nse_system(const double time_index);
@@ -192,6 +184,9 @@ namespace Standard
     solve_NSE_block_preconditioned();
 
     void
+    solve_NSE_Schur_complement_compressible();
+
+    void
     solve_NSE_Schur_complement();
 
     void
@@ -208,7 +203,7 @@ namespace Standard
      */
     CoreModelData::Parameters &parameters;
 
-    const MappingQ<dim> mapping;
+    const MappingQ<dim> temperature_mapping;
 
     const FESystem<dim>       nse_fe;
     DoFHandler<dim>           nse_dof_handler;
@@ -218,7 +213,6 @@ namespace Standard
     std::vector<IndexSet> nse_partitioning, nse_relevant_partitioning;
 
     LA::BlockSparseMatrix nse_matrix;
-    LA::BlockSparseMatrix nse_preconditioner_matrix;
     LA::BlockSparseMatrix nse_mass_matrix;
     LA::BlockSparseMatrix nse_advection_matrix;
     LA::BlockSparseMatrix nse_diffusion_matrix;
@@ -243,24 +237,9 @@ namespace Standard
 
     unsigned int timestep_number;
 
-    using Block_00_PreconType = LA::PreconditionAMG;
-    using Block_11_PreconType = LA::PreconditionJacobi;
-    std::shared_ptr<Block_00_PreconType>    Amg_preconditioner;
-    std::shared_ptr<Block_11_PreconType>    Mp_preconditioner;
     std::shared_ptr<LA::PreconditionJacobi> T_preconditioner;
 
     const bool rebuild_temperature_preconditioner = true;
-
-
-    void
-    local_assemble_nse_preconditioner(
-      const typename DoFHandler<dim>::active_cell_iterator &cell,
-      Assembly::Scratch::NSEPreconditioner<dim> &           scratch,
-      Assembly::CopyData::NSEPreconditioner<dim> &          data);
-
-    void
-    copy_local_to_global_nse_preconditioner(
-      const Assembly::CopyData::NSEPreconditioner<dim> &data);
 
     void
     local_assemble_nse_system(
@@ -296,15 +275,19 @@ namespace Standard
 
     using InnerPreconditionerType =
       typename LinearAlgebra::InnerSchurPreconditioner::type;
-    std::shared_ptr<InnerPreconditionerType>         inner_schur_preconditioner;
+    std::shared_ptr<InnerPreconditionerType>         Mw_schur_preconditioner;
     typename InnerPreconditionerType::AdditionalData data;
     bool is_initialized_inner_schur_preconditioner = false;
   };
 
-} // namespace Standard
+} // namespace ExteriorCalculus
 
-// Extern template instantiations
-extern template class Standard::BoussinesqModel<2>;
-extern template class Standard::BoussinesqModel<3>;
+/*
+ * Extern template instantiations. Do not instantiate for dim=2 since the
+ * meaning of curls is different there. This needs template specialization that
+ * is not implemented yet..
+ */
+// extern template class ExteriorCalculus::BoussinesqModel<2>;
+extern template class ExteriorCalculus::BoussinesqModel<3>;
 
 DYCOREPLANET_CLOSE_NAMESPACE

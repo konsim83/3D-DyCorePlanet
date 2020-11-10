@@ -36,9 +36,16 @@ namespace CoreModelData
     double       time_step;
     unsigned int initial_global_refinement;
 
+    bool cuboid_geometry;
+
     double       nse_theta;
     unsigned int nse_velocity_degree;
-    bool         use_locally_conservative_discretization;
+
+    bool use_FEEC_solver;
+
+    bool use_locally_conservative_discretization;
+
+    unsigned int solver_diagnostics_print_level;
 
     bool use_schur_complement_solver;
     bool use_direct_solver;
@@ -47,6 +54,11 @@ namespace CoreModelData
 
     double       temperature_theta;
     unsigned int temperature_degree;
+
+    std::string filename_output;
+    std::string dirname_output;
+
+    bool hello_from_cluster;
   };
 
 } // namespace CoreModelData

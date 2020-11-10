@@ -43,7 +43,8 @@ namespace LinearAlgebra
      */
     ApproximateInverseMatrix(const MatrixType &        m,
                              const PreconditionerType &preconditioner,
-                             const unsigned int        n_iter);
+                             const unsigned int        n_iter,
+                             bool                      use_simple_cg = true);
 
     /*!
      * Matrix vector multiplication. VectorType template can be serial or
@@ -71,6 +72,8 @@ namespace LinearAlgebra
      * Maximum number of CG iterations.
      */
     const unsigned int max_iter;
+
+    const bool use_simple_cg;
   };
 
 
@@ -82,10 +85,12 @@ namespace LinearAlgebra
   ApproximateInverseMatrix<MatrixType, PreconditionerType>::
     ApproximateInverseMatrix(const MatrixType &        m,
                              const PreconditionerType &preconditioner,
-                             const unsigned int        n_iter)
+                             const unsigned int        n_iter,
+                             bool                      use_simple_cg)
     : matrix(&m)
     , preconditioner(preconditioner)
     , max_iter(n_iter)
+    , use_simple_cg(use_simple_cg)
   {}
 
   template <typename MatrixType, typename PreconditionerType>
@@ -96,13 +101,21 @@ namespace LinearAlgebra
     const VectorType &src) const
   {
     SolverControl solver_control(/* max_iter */ max_iter, 1e-6 * src.l2_norm());
-    SolverGMRES<VectorType> local_solver(solver_control);
 
     dst = 0;
 
     try
       {
-        local_solver.solve(*matrix, dst, src, preconditioner);
+        if (use_simple_cg)
+          {
+            SolverCG<VectorType> local_solver(solver_control);
+            local_solver.solve(*matrix, dst, src, preconditioner);
+          }
+        else
+          {
+            SolverGMRES<VectorType> local_solver(solver_control);
+            local_solver.solve(*matrix, dst, src, preconditioner);
+          }
       }
     catch (std::exception &e)
       {

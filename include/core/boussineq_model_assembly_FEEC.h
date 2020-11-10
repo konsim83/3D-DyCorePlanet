@@ -15,9 +15,9 @@
 #include <deal.II/dofs/dof_renumbering.h>
 #include <deal.II/dofs/dof_tools.h>
 
-#include <deal.II/fe/fe_dgp.h>
 #include <deal.II/fe/fe_dgq.h>
-#include <deal.II/fe/fe_q.h>
+#include <deal.II/fe/fe_nedelec.h>
+#include <deal.II/fe/fe_raviart_thomas.h>
 #include <deal.II/fe/fe_system.h>
 #include <deal.II/fe/fe_values.h>
 #include <deal.II/fe/mapping_q.h>
@@ -54,45 +54,18 @@
 
 DYCOREPLANET_OPEN_NAMESPACE
 
-namespace Standard
+namespace ExteriorCalculus
 {
   namespace Assembly
   {
     namespace Scratch
     {
       ////////////////////////////////////
-      /// NSE preconditioner
-      ////////////////////////////////////
-
-      template <int dim>
-      struct NSEPreconditioner
-      {
-        NSEPreconditioner(const double              time_step,
-                          const double              time_index,
-                          const FiniteElement<dim> &nse_fe,
-                          const Quadrature<dim> &   nse_quadrature,
-                          const Mapping<dim> &      mapping,
-                          const UpdateFlags         update_flags);
-
-        NSEPreconditioner(const NSEPreconditioner<dim> &data);
-
-        FEValues<dim> nse_fe_values;
-
-        std::vector<Tensor<1, dim>> phi_u;
-        std::vector<Tensor<2, dim>> grad_phi_u;
-        std::vector<double>         phi_p;
-
-        const double time_step;
-        const double time_index;
-      };
-
-
-      ////////////////////////////////////
       /// NSE system
       ////////////////////////////////////
 
       template <int dim>
-      struct NSESystem : public NSEPreconditioner<dim>
+      struct NSESystem
       {
         NSESystem(const double              time_step,
                   const double              time_index,
@@ -108,13 +81,18 @@ namespace Standard
         FEValues<dim> temperature_fe_values;
         FEValues<dim> nse_fe_values;
 
-        std::vector<Tensor<1, dim>>          phi_u;
-        std::vector<SymmetricTensor<2, dim>> grads_phi_u;
-        std::vector<double>                  div_phi_u;
+        std::vector<Tensor<1, dim>> phi_w;
+        std::vector<Tensor<1, dim>> curl_phi_w;
+        std::vector<Tensor<1, dim>> phi_u;
+        std::vector<double>         div_phi_u;
+        std::vector<double>         phi_p;
 
         std::vector<double>         old_temperature_values;
         std::vector<Tensor<1, dim>> old_velocity_values;
-        std::vector<Tensor<2, dim>> old_velocity_grads;
+        std::vector<Tensor<1, dim>> old_vorticity_values;
+
+        const double time_step;
+        const double time_index;
       };
 
 
@@ -180,35 +158,22 @@ namespace Standard
     namespace CopyData
     {
       ////////////////////////////////////
-      /// NSE preconditioner copy
-      ////////////////////////////////////
-
-      template <int dim>
-      struct NSEPreconditioner
-      {
-        NSEPreconditioner(const FiniteElement<dim> &nse_fe);
-        NSEPreconditioner(const NSEPreconditioner<dim> &data);
-
-        NSEPreconditioner<dim> &
-        operator=(const NSEPreconditioner<dim> &) = default;
-
-        FullMatrix<double>                   local_matrix;
-        std::vector<types::global_dof_index> local_dof_indices;
-      };
-
-
-      ////////////////////////////////////
       /// NSE system copy
       ////////////////////////////////////
 
       template <int dim>
-      struct NSESystem : public NSEPreconditioner<dim>
+      struct NSESystem
       {
         NSESystem(const FiniteElement<dim> &nse_fe);
 
         NSESystem(const NSESystem<dim> &data);
 
-        Vector<double> local_rhs;
+        NSESystem<dim> &
+        operator=(const NSESystem<dim> &) = default;
+
+        Vector<double>                       local_rhs;
+        FullMatrix<double>                   local_matrix;
+        std::vector<types::global_dof_index> local_dof_indices;
       };
 
 
@@ -247,27 +212,32 @@ namespace Standard
 
     } // namespace CopyData
   }   // namespace Assembly
-} // namespace Standard
+} // namespace ExteriorCalculus
 
-// Extern template instantiations
-extern template class Standard::Assembly::Scratch::NSEPreconditioner<2>;
-extern template class Standard::Assembly::Scratch::NSESystem<2>;
-extern template class Standard::Assembly::Scratch::TemperatureMatrix<2>;
-extern template class Standard::Assembly::Scratch::TemperatureRHS<2>;
+/*
+ * Extern template instantiations. Do not instantiate for dim=2 since the
+ * meaning of curls is different there. This needs template specialization that
+ * is not implemented yet..
+ */
+// extern template class ExteriorCalculus::Assembly::Scratch::NSESystem<2>;
+// extern template class
+// ExteriorCalculus::Assembly::Scratch::TemperatureMatrix<2>; extern template
+// class ExteriorCalculus::Assembly::Scratch::TemperatureRHS<2>;
+//
+// extern template class ExteriorCalculus::Assembly::CopyData::NSESystem<2>;
+// extern template class
+// ExteriorCalculus::Assembly::CopyData::TemperatureMatrix<
+//  2>;
+// extern template class
+// ExteriorCalculus::Assembly::CopyData::TemperatureRHS<2>;
 
-extern template class Standard::Assembly::CopyData::NSEPreconditioner<2>;
-extern template class Standard::Assembly::CopyData::NSESystem<2>;
-extern template class Standard::Assembly::CopyData::TemperatureMatrix<2>;
-extern template class Standard::Assembly::CopyData::TemperatureRHS<2>;
+extern template class ExteriorCalculus::Assembly::Scratch::NSESystem<3>;
+extern template class ExteriorCalculus::Assembly::Scratch::TemperatureMatrix<3>;
+extern template class ExteriorCalculus::Assembly::Scratch::TemperatureRHS<3>;
 
-extern template class Standard::Assembly::Scratch::NSEPreconditioner<3>;
-extern template class Standard::Assembly::Scratch::NSESystem<3>;
-extern template class Standard::Assembly::Scratch::TemperatureMatrix<3>;
-extern template class Standard::Assembly::Scratch::TemperatureRHS<3>;
-
-extern template class Standard::Assembly::CopyData::NSEPreconditioner<3>;
-extern template class Standard::Assembly::CopyData::NSESystem<3>;
-extern template class Standard::Assembly::CopyData::TemperatureMatrix<3>;
-extern template class Standard::Assembly::CopyData::TemperatureRHS<3>;
+extern template class ExteriorCalculus::Assembly::CopyData::NSESystem<3>;
+extern template class ExteriorCalculus::Assembly::CopyData::TemperatureMatrix<
+  3>;
+extern template class ExteriorCalculus::Assembly::CopyData::TemperatureRHS<3>;
 
 DYCOREPLANET_CLOSE_NAMESPACE
