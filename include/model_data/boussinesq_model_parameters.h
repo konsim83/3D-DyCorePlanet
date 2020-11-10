@@ -36,6 +36,8 @@ namespace CoreModelData
     double       time_step;
     unsigned int initial_global_refinement;
 
+    bool cuboid_geometry;
+
     double       nse_theta;
     unsigned int nse_velocity_degree;
 

@@ -163,6 +163,53 @@ namespace CoreModelData
     }
 
 
+    template <int dim>
+    TemperatureInitialValuesCuboid<dim>::TemperatureInitialValuesCuboid(
+      const Point<dim> center,
+      const double     diameter)
+      : Function<dim>(1)
+      , center(center)
+    {
+      covariance_matrix = 0;
+
+      for (unsigned int d = 0; d < dim; ++d)
+        {
+          covariance_matrix[d][d] = 1 / (std::pow(diameter * 0.1, 2));
+        }
+    }
+
+
+    template <int dim>
+    double
+    TemperatureInitialValuesCuboid<dim>::value(const Point<dim> &p,
+                                               const unsigned int) const
+    {
+      double temperature =
+        sqrt(determinant(covariance_matrix)) *
+        exp(-0.5 *
+            scalar_product(p - center, covariance_matrix * (p - center))) /
+        (2 * sqrt(std::pow(2 * numbers::PI, 2)));
+
+      return temperature;
+    }
+
+
+    template <int dim>
+    void
+    TemperatureInitialValuesCuboid<dim>::value_list(
+      const std::vector<Point<dim>> &points,
+      std::vector<double> &          values,
+      const unsigned int) const
+    {
+      Assert(points.size() == values.size(),
+             ExcDimensionMismatch(points.size(), values.size()));
+
+      for (unsigned int p = 0; p < points.size(); ++p)
+        {
+          values[p] = value(points[p]);
+        }
+    }
+
     //////////////////////////////////////////////////
     /// Temperature RHS
     //////////////////////////////////////////////////

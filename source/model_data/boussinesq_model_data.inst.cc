@@ -8,6 +8,9 @@ DYCOREPLANET_OPEN_NAMESPACE
 template class CoreModelData::Boussinesq::VelocityInitialValues<2>;
 template class CoreModelData::Boussinesq::VelocityInitialValues<3>;
 
+template class CoreModelData::Boussinesq::TemperatureInitialValuesCuboid<2>;
+template class CoreModelData::Boussinesq::TemperatureInitialValuesCuboid<3>;
+
 template class CoreModelData::Boussinesq::TemperatureInitialValues<2>;
 template class CoreModelData::Boussinesq::TemperatureInitialValues<3>;
 

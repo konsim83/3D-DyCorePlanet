@@ -12,7 +12,8 @@ namespace Standard
   template <int dim>
   BoussinesqModel<dim>::BoussinesqModel(CoreModelData::Parameters &parameters_)
     : PlanetGeometry<dim>(parameters_.physical_constants.R0,
-                          parameters_.physical_constants.R1)
+                          parameters_.physical_constants.R1,
+                          parameters_.cuboid_geometry)
     , parameters(parameters_)
     , mapping(3)
     , nse_fe(FE_Q<dim>(parameters.nse_velocity_degree),
@@ -38,12 +39,27 @@ namespace Standard
      */
     GridTools::scale(1 / parameters.reference_quantities.length,
                      this->triangulation);
-    /*
-     * We must also rescale the domain parameters since this enters the data of
-     * other objects (initial conditions etc)
-     */
-    parameters.physical_constants.R0 /= parameters.reference_quantities.length;
-    parameters.physical_constants.R1 /= parameters.reference_quantities.length;
+    {
+      /*
+       * We must also rescale the domain parameters since this enters the data
+       * of other objects (initial conditions etc)
+       */
+      if (parameters.cuboid_geometry)
+        {
+          /*
+           * Note that this assumes that the lower left corner is the origin.
+           */
+          this->center /= parameters.reference_quantities.length;
+        }
+
+      this->inner_radius /= parameters.reference_quantities.length;
+      this->outer_radius /= parameters.reference_quantities.length;
+      this->global_Omega_diameter /= parameters.reference_quantities.length;
+      parameters.physical_constants.R0 /=
+        parameters.reference_quantities.length;
+      parameters.physical_constants.R1 /=
+        parameters.reference_quantities.length;
+    }
   }
 
 
@@ -245,25 +261,73 @@ namespace Standard
       nse_constraints.reinit(nse_relevant_set);
       DoFTools::make_hanging_node_constraints(nse_dof_handler, nse_constraints);
 
-      FEValuesExtractors::Vector velocity_components(0);
 
-      // No-slip on boundary 0 (lower)
-      VectorTools::interpolate_boundary_values(
-        nse_dof_handler,
-        0,
-        Functions::ZeroFunction<dim>(dim + 1),
-        nse_constraints,
-        nse_fe.component_mask(velocity_components));
+      if (parameters.cuboid_geometry)
+        {
+          std::vector<GridTools::PeriodicFacePair<
+            typename DoFHandler<dim>::cell_iterator>>
+            periodicity_vector;
 
-      // No-flux on upper boundary
-      std::set<types::boundary_id> no_normal_flux_boundaries;
-      no_normal_flux_boundaries.insert(1);
+          /*
+           * All dimensions up to the last are periodic (z-direction is always
+           * bounded from below and form above)
+           */
+          for (unsigned int d = 0; d < dim - 1; ++d)
+            {
+              GridTools::collect_periodic_faces(nse_dof_handler,
+                                                /*b_id1*/ 2 * (d + 1) - 2,
+                                                /*b_id2*/ 2 * (d + 1) - 1,
+                                                /*direction*/ d,
+                                                periodicity_vector);
+            }
 
-      VectorTools::compute_no_normal_flux_constraints(nse_dof_handler,
-                                                      0,
-                                                      no_normal_flux_boundaries,
-                                                      nse_constraints,
-                                                      mapping);
+          DoFTools::make_periodicity_constraints<DoFHandler<dim>>(
+            periodicity_vector, nse_constraints);
+
+          FEValuesExtractors::Vector velocity_components(0);
+
+          // No-slip on boundary id 2/4 (lower in 2d/3d)
+          VectorTools::interpolate_boundary_values(
+            nse_dof_handler,
+            (dim == 2 ? 2 : 4),
+            Functions::ZeroFunction<dim>(dim + 1),
+            nse_constraints,
+            nse_fe.component_mask(velocity_components));
+
+          // No-flux on boundary id 3/5 (upper in 2d/3d)
+          std::set<types::boundary_id> no_normal_flux_boundaries;
+          no_normal_flux_boundaries.insert((dim == 2 ? 3 : 5));
+
+          VectorTools::compute_no_normal_flux_constraints(
+            nse_dof_handler,
+            0,
+            no_normal_flux_boundaries,
+            nse_constraints,
+            mapping);
+        }
+      else
+        {
+          FEValuesExtractors::Vector velocity_components(0);
+
+          // No-slip on boundary 0 (lower)
+          VectorTools::interpolate_boundary_values(
+            nse_dof_handler,
+            0,
+            Functions::ZeroFunction<dim>(dim + 1),
+            nse_constraints,
+            nse_fe.component_mask(velocity_components));
+
+          // No-flux on upper boundary
+          std::set<types::boundary_id> no_normal_flux_boundaries;
+          no_normal_flux_boundaries.insert(1);
+
+          VectorTools::compute_no_normal_flux_constraints(
+            nse_dof_handler,
+            /* first_vector_component */ 0,
+            no_normal_flux_boundaries,
+            nse_constraints,
+            mapping);
+        }
 
       nse_constraints.close();
     }
@@ -276,13 +340,48 @@ namespace Standard
       temperature_constraints.reinit(temperature_relevant_partitioning);
       DoFTools::make_hanging_node_constraints(temperature_dof_handler,
                                               temperature_constraints);
-      // Lower boundary
-      VectorTools::interpolate_boundary_values(
-        temperature_dof_handler,
-        0,
-        CoreModelData::Boussinesq::TemperatureInitialValues<dim>(
-          parameters.physical_constants.R0, parameters.physical_constants.R1),
-        temperature_constraints);
+
+      if (parameters.cuboid_geometry)
+        {
+          std::vector<GridTools::PeriodicFacePair<
+            typename DoFHandler<dim>::cell_iterator>>
+            periodicity_vector;
+
+          /*
+           * All dimensions up to the last are periodic (z-direction is always
+           * bounded from below and form above)
+           */
+          for (unsigned int d = 0; d < dim - 1; ++d)
+            {
+              GridTools::collect_periodic_faces(temperature_dof_handler,
+                                                /*b_id1*/ 2 * (d + 1) - 2,
+                                                /*b_id2*/ 2 * (d + 1) - 1,
+                                                /*direction*/ d,
+                                                periodicity_vector);
+            }
+
+          DoFTools::make_periodicity_constraints<DoFHandler<dim>>(
+            periodicity_vector, temperature_constraints);
+
+          // Dirchlet on boundary id 2/4 (lower in 2d/3d)
+          VectorTools::interpolate_boundary_values(
+            temperature_dof_handler,
+            (dim == 2 ? 2 : 4),
+            CoreModelData::Boussinesq::TemperatureInitialValuesCuboid<dim>(
+              this->center, this->global_Omega_diameter),
+            temperature_constraints);
+        }
+      else
+        {
+          // Lower boundary is Dirichlet, upper is no-flux and natural
+          VectorTools::interpolate_boundary_values(
+            temperature_dof_handler,
+            0,
+            CoreModelData::Boussinesq::TemperatureInitialValues<dim>(
+              parameters.physical_constants.R0,
+              parameters.physical_constants.R1),
+            temperature_constraints);
+        }
 
       temperature_constraints.close();
     }
@@ -527,12 +626,13 @@ namespace Standard
             scratch.phi_p[k] = scratch.nse_fe_values[pressure].value(k, q);
           }
 
-        const Tensor<1, dim> coriolis =
-          parameters.reference_quantities.length *
-          CoreModelData::coriolis_vector(scratch.nse_fe_values.quadrature_point(
-                                           q),
-                                         parameters.physical_constants.omega) /
-          parameters.reference_quantities.velocity;
+        Tensor<1, dim> coriolis;
+        if (parameters.cuboid_geometry)
+          coriolis = parameters.reference_quantities.length *
+                     CoreModelData::coriolis_vector(
+                       scratch.nse_fe_values.quadrature_point(q),
+                       parameters.physical_constants.omega) /
+                     parameters.reference_quantities.velocity;
 
         /*
          * Move everything to the LHS here.
@@ -550,13 +650,18 @@ namespace Standard
                ) *
               scratch.nse_fe_values.JxW(q);
 
+
         const Tensor<1, dim> gravity =
           (parameters.reference_quantities.length /
            (parameters.reference_quantities.velocity *
             parameters.reference_quantities.velocity)) *
-          CoreModelData::gravity_vector(
-            scratch.nse_fe_values.quadrature_point(q),
-            parameters.physical_constants.gravity_constant);
+          (parameters.cuboid_geometry ?
+             CoreModelData::vertical_gravity_vector(
+               scratch.nse_fe_values.quadrature_point(q),
+               parameters.physical_constants.gravity_constant) :
+             CoreModelData::gravity_vector(
+               scratch.nse_fe_values.quadrature_point(q),
+               parameters.physical_constants.gravity_constant));
 
         /*
          * This is only the RHS
@@ -1694,13 +1799,26 @@ namespace Standard
 
     LA::MPI::Vector solution_tmp(temperature_dof_handler.locally_owned_dofs());
 
-    VectorTools::project(
-      temperature_dof_handler,
-      temperature_constraints,
-      QGauss<dim>(parameters.temperature_degree + 2),
-      CoreModelData::Boussinesq::TemperatureInitialValues<dim>(
-        parameters.physical_constants.R0, parameters.physical_constants.R1),
-      solution_tmp);
+    if (parameters.cuboid_geometry)
+      {
+        VectorTools::project(
+          temperature_dof_handler,
+          temperature_constraints,
+          QGauss<dim>(parameters.temperature_degree + 2),
+          CoreModelData::Boussinesq::TemperatureInitialValuesCuboid<dim>(
+            this->center, this->global_Omega_diameter),
+          solution_tmp);
+      }
+    else
+      {
+        VectorTools::project(
+          temperature_dof_handler,
+          temperature_constraints,
+          QGauss<dim>(parameters.temperature_degree + 2),
+          CoreModelData::Boussinesq::TemperatureInitialValues<dim>(
+            parameters.physical_constants.R0, parameters.physical_constants.R1),
+          solution_tmp);
+      }
 
     old_nse_solution         = nse_solution;
     temperature_solution     = solution_tmp;
@@ -1734,7 +1852,7 @@ namespace Standard
         else if ((timestep_number > 0) &&
                  (timestep_number % parameters.NSE_solver_interval == 0))
           {
-            //            recompute_time_step();
+            recompute_time_step();
 
             assemble_nse_system(time_index);
 

@@ -12,7 +12,8 @@ namespace ExteriorCalculus
   template <int dim>
   BoussinesqModel<dim>::BoussinesqModel(CoreModelData::Parameters &parameters_)
     : PlanetGeometry<dim>(parameters_.physical_constants.R0,
-                          parameters_.physical_constants.R1)
+                          parameters_.physical_constants.R1,
+                          parameters_.cuboid_geometry)
     , parameters(parameters_)
     , temperature_mapping(2)
     , nse_fe(
@@ -40,12 +41,28 @@ namespace ExteriorCalculus
      */
     GridTools::scale(1 / parameters.reference_quantities.length,
                      this->triangulation);
-    /*
-     * We must also rescale the domain parameters since this enters the data of
-     * other objects (initial conditions etc)
-     */
-    parameters.physical_constants.R0 /= parameters.reference_quantities.length;
-    parameters.physical_constants.R1 /= parameters.reference_quantities.length;
+
+    {
+      /*
+       * We must also rescale the domain parameters since this enters the data
+       * of other objects (initial conditions etc)
+       */
+      if (parameters.cuboid_geometry)
+        {
+          /*
+           * Note that this assumes that the lower left corner is the origin.
+           */
+          this->center /= parameters.reference_quantities.length;
+        }
+
+      this->inner_radius /= parameters.reference_quantities.length;
+      this->outer_radius /= parameters.reference_quantities.length;
+      this->global_Omega_diameter /= parameters.reference_quantities.length;
+      parameters.physical_constants.R0 /=
+        parameters.reference_quantities.length;
+      parameters.physical_constants.R1 /=
+        parameters.reference_quantities.length;
+    }
   }
 
 
@@ -228,42 +245,104 @@ namespace ExteriorCalculus
       nse_constraints.reinit(nse_relevant_set);
       DoFTools::make_hanging_node_constraints(nse_dof_handler, nse_constraints);
 
-      /*
-       * Lower boundary (id=0)
-       */
-      VectorTools::project_boundary_values_curl_conforming_l2(
-        nse_dof_handler,
-        /*first vector component */ 0,
-        Functions::ZeroFunction<dim>(2 * dim + 1),
-        /*boundary id*/ 0,
-        nse_constraints);
+      if (parameters.cuboid_geometry)
+        {
+          std::vector<GridTools::PeriodicFacePair<
+            typename DoFHandler<dim>::cell_iterator>>
+            periodicity_vector;
 
-      VectorTools::project_boundary_values_div_conforming(
-        nse_dof_handler,
-        /*first vector component */
-        3,
-        Functions::ZeroFunction<dim>(dim),
-        /*boundary id*/ 0,
-        nse_constraints);
+          /*
+           * All dimensions up to the last are periodic (z-direction is always
+           * bounded from below and form above)
+           */
+          for (unsigned int d = 0; d < dim - 1; ++d)
+            {
+              GridTools::collect_periodic_faces(nse_dof_handler,
+                                                /*b_id1*/ 2 * (d + 1) - 2,
+                                                /*b_id2*/ 2 * (d + 1) - 1,
+                                                /*direction*/ d,
+                                                periodicity_vector);
+            }
 
-      /*
-       * Upper boundary (id=1)
-       */
-      VectorTools::project_boundary_values_curl_conforming_l2(
-        nse_dof_handler,
-        /*first vector component */ 0,
-        Functions::ZeroFunction<dim>(2 * dim + 1),
-        /*boundary id*/ 1,
-        nse_constraints);
+          DoFTools::make_periodicity_constraints<DoFHandler<dim>>(
+            periodicity_vector, nse_constraints);
 
-      VectorTools::project_boundary_values_div_conforming(
-        nse_dof_handler,
-        /*first vector component */
-        3,
-        Functions::ZeroFunction<dim>(dim),
-        //        ConstantFunction<dim>(1500, dim),
-        /*boundary id*/ 1,
-        nse_constraints);
+          /*
+           * Lower boundary (id=4)
+           */
+          VectorTools::project_boundary_values_curl_conforming_l2(
+            nse_dof_handler,
+            /*first vector component */ 0,
+            Functions::ZeroFunction<dim>(2 * dim),
+            /*boundary id*/ 4,
+            nse_constraints);
+
+          VectorTools::project_boundary_values_div_conforming(
+            nse_dof_handler,
+            /*first vector component */
+            3,
+            Functions::ZeroFunction<dim>(dim),
+            /*boundary id*/ 4,
+            nse_constraints);
+
+          /*
+           * Upper boundary (id=5)
+           */
+          VectorTools::project_boundary_values_curl_conforming_l2(
+            nse_dof_handler,
+            /*first vector component */ 0,
+            Functions::ZeroFunction<dim>(2 * dim),
+            /*boundary id*/ 5,
+            nse_constraints);
+
+          VectorTools::project_boundary_values_div_conforming(
+            nse_dof_handler,
+            /*first vector component */
+            3,
+            Functions::ZeroFunction<dim>(dim),
+            //        ConstantFunction<dim>(1500, dim),
+            /*boundary id*/ 5,
+            nse_constraints);
+        }
+      else
+        {
+          /*
+           * Lower boundary (id=0)
+           */
+          VectorTools::project_boundary_values_curl_conforming_l2(
+            nse_dof_handler,
+            /*first vector component */ 0,
+            Functions::ZeroFunction<dim>(2 * dim),
+            /*boundary id*/ 0,
+            nse_constraints);
+
+          VectorTools::project_boundary_values_div_conforming(
+            nse_dof_handler,
+            /*first vector component */
+            3,
+            Functions::ZeroFunction<dim>(dim),
+            /*boundary id*/ 0,
+            nse_constraints);
+
+          /*
+           * Upper boundary (id=1)
+           */
+          VectorTools::project_boundary_values_curl_conforming_l2(
+            nse_dof_handler,
+            /*first vector component */ 0,
+            Functions::ZeroFunction<dim>(2 * dim),
+            /*boundary id*/ 1,
+            nse_constraints);
+
+          VectorTools::project_boundary_values_div_conforming(
+            nse_dof_handler,
+            /*first vector component */
+            3,
+            Functions::ZeroFunction<dim>(dim),
+            //        ConstantFunction<dim>(1500, dim),
+            /*boundary id*/ 1,
+            nse_constraints);
+        }
 
       nse_constraints.close();
     }
@@ -278,13 +357,47 @@ namespace ExteriorCalculus
       DoFTools::make_hanging_node_constraints(temperature_dof_handler,
                                               temperature_constraints);
 
-      // Lower boundary
-      VectorTools::interpolate_boundary_values(
-        temperature_dof_handler,
-        /*boundary id*/ 0,
-        CoreModelData::Boussinesq::TemperatureInitialValues<dim>(
-          parameters.physical_constants.R0, parameters.physical_constants.R1),
-        temperature_constraints);
+      if (parameters.cuboid_geometry)
+        {
+          std::vector<GridTools::PeriodicFacePair<
+            typename DoFHandler<dim>::cell_iterator>>
+            periodicity_vector;
+
+          /*
+           * All dimensions up to the last are periodic (z-direction is always
+           * bounded from below and form above)
+           */
+          for (unsigned int d = 0; d < dim - 1; ++d)
+            {
+              GridTools::collect_periodic_faces(temperature_dof_handler,
+                                                /*b_id1*/ 2 * (d + 1) - 2,
+                                                /*b_id2*/ 2 * (d + 1) - 1,
+                                                /*direction*/ d,
+                                                periodicity_vector);
+            }
+
+          DoFTools::make_periodicity_constraints<DoFHandler<dim>>(
+            periodicity_vector, temperature_constraints);
+
+          // Dirchlet on boundary id 2/4 (lower in 2d/3d)
+          VectorTools::interpolate_boundary_values(
+            temperature_dof_handler,
+            (dim == 2 ? 2 : 4),
+            CoreModelData::Boussinesq::TemperatureInitialValuesCuboid<dim>(
+              this->center, this->global_Omega_diameter),
+            temperature_constraints);
+        }
+      else
+        {
+          // Lower boundary is Dirichlet, upper is no-flux and natural
+          VectorTools::interpolate_boundary_values(
+            temperature_dof_handler,
+            /*boundary id*/ 0,
+            CoreModelData::Boussinesq::TemperatureInitialValues<dim>(
+              parameters.physical_constants.R0,
+              parameters.physical_constants.R1),
+            temperature_constraints);
+        }
 
       temperature_constraints.close();
     }
@@ -386,12 +499,13 @@ namespace ExteriorCalculus
             scratch.phi_p[k] = scratch.nse_fe_values[pressure].value(k, q);
           }
 
-        const Tensor<1, dim> coriolis =
-          parameters.reference_quantities.length *
-          CoreModelData::coriolis_vector(scratch.nse_fe_values.quadrature_point(
-                                           q),
-                                         parameters.physical_constants.omega) /
-          parameters.reference_quantities.velocity;
+        Tensor<1, dim> coriolis;
+        if (parameters.cuboid_geometry)
+          coriolis = parameters.reference_quantities.length *
+                     CoreModelData::coriolis_vector(
+                       scratch.nse_fe_values.quadrature_point(q),
+                       parameters.physical_constants.omega) /
+                     parameters.reference_quantities.velocity;
 
         /*
          * Move everything to the LHS here.
@@ -403,14 +517,15 @@ namespace ExteriorCalculus
                -
                scratch.curl_phi_w[i] * scratch.phi_u[j] // rot_w term block(0,1)
                + scratch.phi_u[i] * scratch.phi_u[j] // mass_u term block(1,1)
-               + parameters.time_step *
-                   (one_over_reynolds_number * scratch.phi_u[i] *
-                    scratch.curl_phi_w[j]) // 1/Re * v * curl(w) block(1,0)
+               + parameters.time_step * one_over_reynolds_number *
+                   (scratch.phi_u[i] * scratch.curl_phi_w[j] +
+                    scratch.div_phi_u[i] *
+                      scratch.div_phi_u[j]) // 1/Re * v * curl(w) block(1,0)
                - (scratch.div_phi_u[i] *
                   scratch
                     .phi_p[j]) // div(v)*p ---> scaled pressure dt*p  block(1,2)
-               -
-               (scratch.phi_p[i] * scratch.div_phi_u[j]) // q*div(u)  block(2,1)
+               - (scratch.phi_p[i] *
+                  scratch.div_phi_u[j]) // q * div(u) block(2, 1)
                ) *
               scratch.nse_fe_values.JxW(q);
 
@@ -418,9 +533,13 @@ namespace ExteriorCalculus
           (parameters.reference_quantities.length /
            (parameters.reference_quantities.velocity *
             parameters.reference_quantities.velocity)) *
-          CoreModelData::gravity_vector(
-            scratch.nse_fe_values.quadrature_point(q),
-            parameters.physical_constants.gravity_constant);
+          (parameters.cuboid_geometry ?
+             CoreModelData::vertical_gravity_vector(
+               scratch.nse_fe_values.quadrature_point(q),
+               parameters.physical_constants.gravity_constant) :
+             CoreModelData::gravity_vector(
+               scratch.nse_fe_values.quadrature_point(q),
+               parameters.physical_constants.gravity_constant));
 
         /*
          * This is only the RHS
@@ -918,7 +1037,7 @@ namespace ExteriorCalculus
          (timestep_number % parameters.NSE_solver_interval == 0)))
       {
         TimerOutput::Scope timer_section(this->computing_timer,
-                                         "   Solve Stokes system");
+                                         "   Solve NSE system");
         this->pcout
           << "   Solving Navier-Stokes system for one time step with (block preconditioned solver)... "
           << std::flush;
@@ -1008,6 +1127,102 @@ namespace ExteriorCalculus
         nse_solution = distributed_nse_solution;
 
         this->pcout << n_iterations << " iterations." << std::endl;
+      } // solver time intervall constraint
+  }
+
+
+  template <int dim>
+  void
+  BoussinesqModel<dim>::solve_NSE_Schur_complement_compressible()
+  {
+    if ((timestep_number == 0) ||
+        ((timestep_number > 0) &&
+         (timestep_number % parameters.NSE_solver_interval == 0)))
+      {
+        TimerOutput::Scope timer_section(this->computing_timer,
+                                         "   Solve NSE system");
+        this->pcout
+          << "   Solving compressible Navier-Stokes system for one time step... "
+          << std::flush;
+
+        /*
+         * Prepare vectors
+         */
+        LA::MPI::BlockVector nse_local_rhs;
+
+        nse_local_rhs.reinit(nse_partitioning, this->mpi_communicator);
+
+        LA::MPI::BlockVector distributed_nse_solution(nse_rhs);
+        distributed_nse_solution = nse_solution;
+
+        /*
+         * Initialize the preconditioner of the mass matrix in H(curl).
+         */
+        using Mw_InnerPerconditionerType =
+          typename LinearAlgebra::InnerSchurPreconditioner::type;
+        Mw_schur_preconditioner =
+          std::make_shared<Mw_InnerPerconditionerType>();
+        // Fill preconditioner with life
+        Mw_schur_preconditioner->initialize(nse_matrix.block(0, 0), data);
+
+        using Mw_InverseType =
+          LinearAlgebra::InverseMatrix<LA::SparseMatrix,
+                                       Mw_InnerPerconditionerType>;
+        const Mw_InverseType Mw_inverse(nse_matrix.block(0, 0),
+                                        *Mw_schur_preconditioner,
+                                        /* use_simple_cg */ true);
+
+        LinearAlgebra::ShiftedSchurComplement<LA::BlockSparseMatrix,
+                                              LA::MPI::Vector,
+                                              Mw_InverseType>
+          Mu_minus_Sw(nse_matrix,
+                      Mw_inverse,
+                      nse_partitioning,
+                      this->mpi_communicator);
+
+        using Mu_minus_Sw_PreconditionerType = LA::PreconditionJacobi;
+        Mu_minus_Sw_PreconditionerType Mu_minus_Sw_preconditioner;
+        Mu_minus_Sw_preconditioner.initialize(nse_matrix.block(1, 1));
+
+        using Mu_minus_Sw_InverseType = LinearAlgebra::InverseMatrix<
+          LinearAlgebra::ShiftedSchurComplement<LA::BlockSparseMatrix,
+                                                LA::MPI::Vector,
+                                                Mw_InverseType>,
+          Mu_minus_Sw_PreconditionerType>;
+        Mu_minus_Sw_InverseType Mu_minus_Sw_inverse(Mu_minus_Sw,
+                                                    Mu_minus_Sw_preconditioner,
+                                                    /* use_simple_cg */ true);
+
+        {
+          TimerOutput::Scope t(
+            this->computing_timer,
+            "      Solve NSE system - inner CG solver (for w and u)");
+
+          this->pcout << "      Apply inner CG solver (for w and u)..."
+                      << std::endl;
+
+          Mu_minus_Sw_inverse.vmult(distributed_nse_solution.block(1),
+                                    nse_rhs.block(1));
+
+          nse_constraints.distribute(distributed_nse_solution);
+
+          // tmp of size block(0)
+          LA::MPI::Vector tmp_0(nse_partitioning[0], this->mpi_communicator);
+
+          nse_matrix.block(0, 1).vmult(tmp_0,
+                                       distributed_nse_solution.block(1));
+          Mw_inverse.vmult(distributed_nse_solution.block(0), tmp_0);
+          distributed_nse_solution.block(0) *= -1;
+
+          nse_constraints.distribute(distributed_nse_solution);
+
+          this->pcout << "      Inner CG solver (for w and u) completed."
+                      << std::endl
+                      << std::endl;
+        } // solve for w
+
+        nse_solution = distributed_nse_solution;
+
       } // solver time intervall constraint
   }
 
@@ -1398,32 +1613,6 @@ namespace ExteriorCalculus
     this->pcout << "   Writing Boussinesq solution for one timestep... "
                 << std::flush;
 
-
-    //    std::vector<std::string> nse_names(dim, "vorticity");
-    //    nse_names.emplace_back("velocity");
-    //    nse_names.emplace_back("velocity");
-    //    nse_names.emplace_back("velocity");
-    //    nse_names.emplace_back("p");
-    //
-    //    std::vector<DataComponentInterpretation::DataComponentInterpretation>
-    //      nse_component_interpretation(
-    //        2 * dim + 1,
-    //        DataComponentInterpretation::component_is_part_of_vector);
-    //    nse_component_interpretation[2 * dim] =
-    //      DataComponentInterpretation::component_is_scalar;
-    //
-    //    DataOut<dim> data_out;
-    //    data_out.add_data_vector(nse_dof_handler,
-    //                             nse_solution,
-    //                             nse_names,
-    //                             nse_component_interpretation);
-    //    data_out.add_data_vector(temperature_dof_handler,
-    //                             temperature_solution,
-    //                             "T");
-    //    data_out.build_patches(
-    //      std::min(parameters.nse_velocity_degree,
-    //      parameters.temperature_degree));
-
     const FESystem<dim> joint_fe(nse_fe, 1, temperature_fe, 1);
 
     DoFHandler<dim> joint_dof_handler(this->triangulation);
@@ -1491,7 +1680,7 @@ namespace ExteriorCalculus
                           [joint_fe.system_to_base_index(i).second]);
                   }
               }
-          } // end if is_locally_owned()
+          } // namespace ExteriorCalculus
     }       // end for ++joint_cell
 
     joint_solution.compress(VectorOperation::insert);
@@ -1660,13 +1849,26 @@ namespace ExteriorCalculus
 
     LA::MPI::Vector solution_tmp(temperature_dof_handler.locally_owned_dofs());
 
-    VectorTools::project(
-      temperature_dof_handler,
-      temperature_constraints,
-      QGauss<dim>(parameters.temperature_degree + 2),
-      CoreModelData::Boussinesq::TemperatureInitialValues<dim>(
-        parameters.physical_constants.R0, parameters.physical_constants.R1),
-      solution_tmp);
+    if (parameters.cuboid_geometry)
+      {
+        VectorTools::project(
+          temperature_dof_handler,
+          temperature_constraints,
+          QGauss<dim>(parameters.temperature_degree + 2),
+          CoreModelData::Boussinesq::TemperatureInitialValuesCuboid<dim>(
+            this->center, this->global_Omega_diameter),
+          solution_tmp);
+      }
+    else
+      {
+        VectorTools::project(
+          temperature_dof_handler,
+          temperature_constraints,
+          QGauss<dim>(parameters.temperature_degree + 2),
+          CoreModelData::Boussinesq::TemperatureInitialValues<dim>(
+            parameters.physical_constants.R0, parameters.physical_constants.R1),
+          solution_tmp);
+      }
 
     old_nse_solution         = nse_solution;
     temperature_solution     = solution_tmp;
@@ -1697,7 +1899,7 @@ namespace ExteriorCalculus
         else if ((timestep_number > 0) &&
                  (timestep_number % parameters.NSE_solver_interval == 0))
           {
-            //            recompute_time_step();
+            recompute_time_step();
 
             assemble_nse_system(time_index);
           }
@@ -1723,6 +1925,8 @@ namespace ExteriorCalculus
           {
             solve_NSE_block_preconditioned();
           }
+
+        //        solve_NSE_Schur_complement_compressible();
 
         solve_temperature();
 
