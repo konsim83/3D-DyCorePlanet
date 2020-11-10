@@ -22,13 +22,10 @@ namespace ExteriorCalculus
         1,
         static_cast<const FiniteElement<dim> &>(FE_RaviartThomas<dim>(
           std::max(static_cast<int>(parameters.nse_velocity_degree) - 1, 0))),
-        1
-        //		,
-        //        static_cast<const FiniteElement<dim> &>(FE_DGQ<dim>(
-        //          std::max(static_cast<int>(parameters.nse_velocity_degree) -
-        //          1, 0))),
-        //        1
-        )
+        1,
+        static_cast<const FiniteElement<dim> &>(FE_DGQ<dim>(
+          std::max(static_cast<int>(parameters.nse_velocity_degree) - 1, 0))),
+        1)
     , nse_dof_handler(this->triangulation)
     , temperature_fe(parameters.temperature_degree)
     , temperature_dof_handler(this->triangulation)
@@ -118,13 +115,13 @@ namespace ExteriorCalculus
           }
       }
 
-    DoFTools::make_sparsity_pattern(
-      nse_dof_handler,
-      //                                    coupling,
-      sp,
-      nse_constraints,
-      false,
-      Utilities::MPI::this_mpi_process(this->mpi_communicator));
+    DoFTools::make_sparsity_pattern(nse_dof_handler,
+                                    coupling,
+                                    sp,
+                                    nse_constraints,
+                                    false,
+                                    Utilities::MPI::this_mpi_process(
+                                      this->mpi_communicator));
     sp.compress();
 
     nse_matrix.reinit(sp);
@@ -188,11 +185,11 @@ namespace ExteriorCalculus
     /*
      * Count dofs
      */
-    std::vector<types::global_dof_index> nse_dofs_per_block(2);
+    std::vector<types::global_dof_index> nse_dofs_per_block(3);
     DoFTools::count_dofs_per_block(nse_dof_handler, nse_dofs_per_block);
     const unsigned int n_w = nse_dofs_per_block[0], n_u = nse_dofs_per_block[1],
-                       //                       n_p = nse_dofs_per_block[2],
-      n_T = temperature_dof_handler.n_dofs();
+                       n_p = nse_dofs_per_block[2],
+                       n_T = temperature_dof_handler.n_dofs();
 
     /*
      * Comma separated large numbers
@@ -206,15 +203,9 @@ namespace ExteriorCalculus
     this->pcout << "Number of active cells: "
                 << this->triangulation.n_global_active_cells() << " (on "
                 << this->triangulation.n_levels() << " levels)" << std::endl
-                << "Number of degrees of freedom: "
-                << n_w +
-                     n_u
-                     //				+ n_p
-                     + n_T
-                << " (" << n_w << " + " << n_u
-                << " + "
-                //				<< n_p << " + "
-                << n_T << ")" << std::endl
+                << "Number of degrees of freedom: " << n_w + n_u + n_p + n_T
+                << " (" << n_w << " + " << n_u << " + " << n_p << " + " << n_T
+                << ")" << std::endl
                 << std::endl;
     this->pcout.get_stream().imbue(s);
 
@@ -229,16 +220,16 @@ namespace ExteriorCalculus
       nse_index_set = nse_dof_handler.locally_owned_dofs();
       nse_partitioning.push_back(nse_index_set.get_view(0, n_w));
       nse_partitioning.push_back(nse_index_set.get_view(n_w, n_w + n_u));
-      //      nse_partitioning.push_back(
-      //        nse_index_set.get_view(n_w + n_u, n_w + n_u + n_p));
+      nse_partitioning.push_back(
+        nse_index_set.get_view(n_w + n_u, n_w + n_u + n_p));
 
       DoFTools::extract_locally_relevant_dofs(nse_dof_handler,
                                               nse_relevant_set);
       nse_relevant_partitioning.push_back(nse_relevant_set.get_view(0, n_w));
       nse_relevant_partitioning.push_back(
         nse_relevant_set.get_view(n_w, n_w + n_u));
-      //      nse_relevant_partitioning.push_back(
-      //        nse_relevant_set.get_view(n_w + n_u, n_w + n_u + n_p));
+      nse_relevant_partitioning.push_back(
+        nse_relevant_set.get_view(n_w + n_u, n_w + n_u + n_p));
       temperature_partitioning = temperature_dof_handler.locally_owned_dofs();
       DoFTools::extract_locally_relevant_dofs(
         temperature_dof_handler, temperature_relevant_partitioning);
@@ -453,7 +444,7 @@ namespace ExteriorCalculus
 
     const FEValuesExtractors::Vector vorticity(0);
     const FEValuesExtractors::Vector velocities(dim);
-    //    const FEValuesExtractors::Scalar pressure(2 * dim);
+    const FEValuesExtractors::Scalar pressure(2 * dim);
 
     const double one_over_reynolds_number =
       (1. / CoreModelData::get_reynolds_number(
@@ -505,8 +496,7 @@ namespace ExteriorCalculus
             scratch.div_phi_u[k] =
               scratch.nse_fe_values[velocities].divergence(k, q);
 
-            //            scratch.phi_p[k] =
-            //            scratch.nse_fe_values[pressure].value(k, q);
+            scratch.phi_p[k] = scratch.nse_fe_values[pressure].value(k, q);
           }
 
         Tensor<1, dim> coriolis;
@@ -531,13 +521,11 @@ namespace ExteriorCalculus
                    (scratch.phi_u[i] * scratch.curl_phi_w[j] +
                     scratch.div_phi_u[i] *
                       scratch.div_phi_u[j]) // 1/Re * v * curl(w) block(1,0)
-               //               - (scratch.div_phi_u[i] *
-               //                  scratch
-               //                    .phi_p[j]) // div(v)*p ---> scaled pressure
-               //                    dt*p  block(1,2)
-               //               -
-               //               (scratch.phi_p[i] * scratch.div_phi_u[j]) //
-               //               q*div(u)  block(2,1)
+               - (scratch.div_phi_u[i] *
+                  scratch
+                    .phi_p[j]) // div(v)*p ---> scaled pressure dt*p  block(1,2)
+               - (scratch.phi_p[i] *
+                  scratch.div_phi_u[j]) // q * div(u) block(2, 1)
                ) *
               scratch.nse_fe_values.JxW(q);
 
@@ -1625,125 +1613,96 @@ namespace ExteriorCalculus
     this->pcout << "   Writing Boussinesq solution for one timestep... "
                 << std::flush;
 
+    const FESystem<dim> joint_fe(nse_fe, 1, temperature_fe, 1);
 
-    std::vector<std::string> nse_names(dim, "vorticity");
-    nse_names.emplace_back("velocity");
-    nse_names.emplace_back("velocity");
-    nse_names.emplace_back("velocity");
-    //    nse_names.emplace_back("p");
+    DoFHandler<dim> joint_dof_handler(this->triangulation);
+    joint_dof_handler.distribute_dofs(joint_fe);
 
-    std::vector<DataComponentInterpretation::DataComponentInterpretation>
-      nse_component_interpretation(
-        2 * dim, DataComponentInterpretation::component_is_part_of_vector);
-    //    nse_component_interpretation[2 * dim] =
-    //      DataComponentInterpretation::component_is_scalar;
+    Assert(joint_dof_handler.n_dofs() ==
+             nse_dof_handler.n_dofs() + temperature_dof_handler.n_dofs(),
+           ExcInternalError());
+
+    LA::MPI::Vector joint_solution;
+
+    joint_solution.reinit(joint_dof_handler.locally_owned_dofs(),
+                          this->mpi_communicator);
+
+    {
+      std::vector<types::global_dof_index> local_joint_dof_indices(
+        joint_fe.dofs_per_cell);
+      std::vector<types::global_dof_index> local_nse_dof_indices(
+        nse_fe.dofs_per_cell);
+      std::vector<types::global_dof_index> local_temperature_dof_indices(
+        temperature_fe.dofs_per_cell);
+
+      typename DoFHandler<dim>::active_cell_iterator
+        joint_cell       = joint_dof_handler.begin_active(),
+        joint_endc       = joint_dof_handler.end(),
+        nse_cell         = nse_dof_handler.begin_active(),
+        temperature_cell = temperature_dof_handler.begin_active();
+      for (; joint_cell != joint_endc;
+           ++joint_cell, ++nse_cell, ++temperature_cell)
+        if (joint_cell->is_locally_owned())
+          {
+            joint_cell->get_dof_indices(local_joint_dof_indices);
+            nse_cell->get_dof_indices(local_nse_dof_indices);
+            temperature_cell->get_dof_indices(local_temperature_dof_indices);
+
+            for (unsigned int i = 0; i < joint_fe.dofs_per_cell; ++i)
+              {
+                /*
+                 * A vorticity/velocity/pressure dof
+                 */
+                if (joint_fe.system_to_base_index(i).first.first == 0)
+                  {
+                    Assert(joint_fe.system_to_base_index(i).second <
+                             local_nse_dof_indices.size(),
+                           ExcInternalError());
+
+                    joint_solution(local_joint_dof_indices[i]) = nse_solution(
+                      local_nse_dof_indices[joint_fe.system_to_base_index(i)
+                                              .second]);
+                  }
+                /*
+                 * A temperature dof
+                 */
+                else
+                  {
+                    Assert(joint_fe.system_to_base_index(i).first.first == 1,
+                           ExcInternalError());
+                    Assert(joint_fe.system_to_base_index(i).second <
+                             local_temperature_dof_indices.size(),
+                           ExcInternalError());
+
+                    joint_solution(local_joint_dof_indices[i]) =
+                      temperature_solution(
+                        local_temperature_dof_indices
+                          [joint_fe.system_to_base_index(i).second]);
+                  }
+              }
+          } // namespace ExteriorCalculus
+    }       // end for ++joint_cell
+
+    joint_solution.compress(VectorOperation::insert);
+
+    IndexSet locally_relevant_joint_dofs(joint_dof_handler.n_dofs());
+    DoFTools::extract_locally_relevant_dofs(joint_dof_handler,
+                                            locally_relevant_joint_dofs);
+
+    LA::MPI::Vector locally_relevant_joint_solution;
+    locally_relevant_joint_solution.reinit(locally_relevant_joint_dofs,
+                                           this->mpi_communicator);
+    locally_relevant_joint_solution = joint_solution;
+
+    Postprocessor postprocessor(
+      Utilities::MPI::this_mpi_process(this->mpi_communicator));
 
     DataOut<dim> data_out;
-    data_out.add_data_vector(nse_dof_handler,
-                             nse_solution,
-                             nse_names,
-                             nse_component_interpretation);
-    data_out.add_data_vector(temperature_dof_handler,
-                             temperature_solution,
-                             "T");
-    data_out.build_patches(
-      std::min(parameters.nse_velocity_degree, parameters.temperature_degree));
+    data_out.attach_dof_handler(joint_dof_handler);
 
-    //    const FESystem<dim> joint_fe(nse_fe, 1, temperature_fe, 1);
-    //
-    //    DoFHandler<dim> joint_dof_handler(this->triangulation);
-    //    joint_dof_handler.distribute_dofs(joint_fe);
-    //
-    //    Assert(joint_dof_handler.n_dofs() ==
-    //             nse_dof_handler.n_dofs() + temperature_dof_handler.n_dofs(),
-    //           ExcInternalError());
-    //
-    //    LA::MPI::Vector joint_solution;
-    //
-    //    joint_solution.reinit(joint_dof_handler.locally_owned_dofs(),
-    //                          this->mpi_communicator);
-    //
-    //    {
-    //      std::vector<types::global_dof_index> local_joint_dof_indices(
-    //        joint_fe.dofs_per_cell);
-    //      std::vector<types::global_dof_index> local_nse_dof_indices(
-    //        nse_fe.dofs_per_cell);
-    //      std::vector<types::global_dof_index> local_temperature_dof_indices(
-    //        temperature_fe.dofs_per_cell);
-    //
-    //      typename DoFHandler<dim>::active_cell_iterator
-    //        joint_cell       = joint_dof_handler.begin_active(),
-    //        joint_endc       = joint_dof_handler.end(),
-    //        nse_cell         = nse_dof_handler.begin_active(),
-    //        temperature_cell = temperature_dof_handler.begin_active();
-    //      for (; joint_cell != joint_endc;
-    //           ++joint_cell, ++nse_cell, ++temperature_cell)
-    //        if (joint_cell->is_locally_owned())
-    //          {
-    //            joint_cell->get_dof_indices(local_joint_dof_indices);
-    //            nse_cell->get_dof_indices(local_nse_dof_indices);
-    //            temperature_cell->get_dof_indices(local_temperature_dof_indices);
-    //
-    //            for (unsigned int i = 0; i < joint_fe.dofs_per_cell; ++i)
-    //              {
-    //                /*
-    //                 * A vorticity/velocity/pressure dof
-    //                 */
-    //                if (joint_fe.system_to_base_index(i).first.first == 0)
-    //                  {
-    //                    Assert(joint_fe.system_to_base_index(i).second <
-    //                             local_nse_dof_indices.size(),
-    //                           ExcInternalError());
-    //
-    //                    joint_solution(local_joint_dof_indices[i]) =
-    //                    nse_solution(
-    //                      local_nse_dof_indices[joint_fe.system_to_base_index(i)
-    //                                              .second]);
-    //                  }
-    //                /*
-    //                 * A temperature dof
-    //                 */
-    //                else
-    //                  {
-    //                    Assert(joint_fe.system_to_base_index(i).first.first ==
-    //                    1,
-    //                           ExcInternalError());
-    //                    Assert(joint_fe.system_to_base_index(i).second <
-    //                             local_temperature_dof_indices.size(),
-    //                           ExcInternalError());
-    //
-    //                    joint_solution(local_joint_dof_indices[i]) =
-    //                      temperature_solution(
-    //                        local_temperature_dof_indices
-    //                          [joint_fe.system_to_base_index(i).second]);
-    //                  }
-    //              }
-    //          } // end if is_locally_owned()
-    //    }       // end for ++joint_cell
-    //
-    //    joint_solution.compress(VectorOperation::insert);
-    //
-    //    IndexSet locally_relevant_joint_dofs(joint_dof_handler.n_dofs());
-    //    DoFTools::extract_locally_relevant_dofs(joint_dof_handler,
-    //                                            locally_relevant_joint_dofs);
-    //
-    //    LA::MPI::Vector locally_relevant_joint_solution;
-    //    locally_relevant_joint_solution.reinit(locally_relevant_joint_dofs,
-    //                                           this->mpi_communicator);
-    //    locally_relevant_joint_solution = joint_solution;
-    //
-    //    Postprocessor postprocessor(
-    //      Utilities::MPI::this_mpi_process(this->mpi_communicator));
-    //
-    //    DataOut<dim> data_out;
-    //    data_out.attach_dof_handler(joint_dof_handler);
-    //
-    //    data_out.add_data_vector(locally_relevant_joint_solution,
-    //    postprocessor);
-    //
-    //    data_out.build_patches(parameters.nse_velocity_degree);
+    data_out.add_data_vector(locally_relevant_joint_solution, postprocessor);
 
-
+    data_out.build_patches(parameters.nse_velocity_degree);
 
     static int        out_index = 0;
     const std::string filename =
@@ -1940,7 +1899,7 @@ namespace ExteriorCalculus
         else if ((timestep_number > 0) &&
                  (timestep_number % parameters.NSE_solver_interval == 0))
           {
-            //            recompute_time_step();
+            recompute_time_step();
 
             assemble_nse_system(time_index);
           }
@@ -1958,16 +1917,16 @@ namespace ExteriorCalculus
               "TrilinosWrappers::MPI::BlockSparseMatrix classes.");
           }
 
-        //        if (parameters.use_schur_complement_solver)
-        //          {
-        //            solve_NSE_Schur_complement();
-        //          }
-        //        else
-        //          {
-        //            solve_NSE_block_preconditioned();
-        //          }
+        if (parameters.use_schur_complement_solver)
+          {
+            solve_NSE_Schur_complement();
+          }
+        else
+          {
+            solve_NSE_block_preconditioned();
+          }
 
-        solve_NSE_Schur_complement_compressible();
+        //        solve_NSE_Schur_complement_compressible();
 
         solve_temperature();
 

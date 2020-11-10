@@ -1852,7 +1852,7 @@ namespace Standard
         else if ((timestep_number > 0) &&
                  (timestep_number % parameters.NSE_solver_interval == 0))
           {
-            //            recompute_time_step();
+            recompute_time_step();
 
             assemble_nse_system(time_index);
 
