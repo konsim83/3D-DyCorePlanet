@@ -206,10 +206,8 @@ namespace Standard
     /*
      * Count dofs
      */
-    std::vector<types::global_dof_index> nse_dofs_per_block(2);
-    DoFTools::count_dofs_per_block(nse_dof_handler,
-                                   nse_dofs_per_block,
-                                   nse_sub_blocks);
+    std::vector<types::global_dof_index> nse_dofs_per_block =
+      DoFTools::count_dofs_per_fe_block(nse_dof_handler, nse_sub_blocks);
     const unsigned int n_u = nse_dofs_per_block[0], n_p = nse_dofs_per_block[1],
                        n_T = temperature_dof_handler.n_dofs();
 
@@ -305,7 +303,7 @@ namespace Standard
             nse_constraints,
             mapping);
         }
-      else
+      else // shell geometry
         {
           FEValuesExtractors::Vector velocity_components(0);
 
@@ -606,7 +604,7 @@ namespace Standard
       {
         const double old_temperature = scratch.old_temperature_values[q];
         const double density_scaling = CoreModelData::density_scaling(
-          parameters.physical_constants.density,
+          parameters.physical_constants.expansion_coefficient,
           old_temperature,
           parameters.reference_quantities.temperature_ref);
         const Tensor<1, dim> old_velocity = scratch.old_velocity_values[q];
@@ -669,19 +667,16 @@ namespace Standard
         for (unsigned int i = 0; i < dofs_per_cell; ++i)
           data.local_rhs(i) +=
             (scratch.phi_u[i] * old_velocity +
-             parameters.time_step * density_scaling * gravity * scratch.phi_u[i]
-             //             - parameters.time_step * scratch.phi_u[i] *
-             //               (old_velocity * old_velocity_grads) // advection
-             //               at previous time
-             //             - (dim == 2 ? -parameters.time_step * 2 *
-             //                             parameters.physical_constants.omega
-             //                             * scratch.phi_u[i] *
-             //                             cross_product_2d(old_velocity) :
-             //                           parameters.time_step * 2 *
-             //                           scratch.phi_u[i] *
-             //                             cross_product_3d(coriolis,
-             //                                              old_velocity)) //
-             //                                              coriolis force)
+             parameters.time_step * density_scaling * gravity *
+               scratch.phi_u[i] -
+             parameters.time_step * scratch.phi_u[i] *
+               (old_velocity * old_velocity_grads) // advection at previous time
+             - parameters.time_step *
+                 (dim == 2 ?
+                    -2 * scratch.phi_u[i] * cross_product_2d(old_velocity) :
+                    2 * scratch.phi_u[i] *
+                      cross_product_3d(coriolis,
+                                       old_velocity)) // coriolis force
              ) *
             scratch.nse_fe_values.JxW(q);
       }
@@ -1064,7 +1059,17 @@ namespace Standard
             }
         }
 
-    return Utilities::MPI::max(max_local_velocity, this->mpi_communicator);
+    double max_global_velocity =
+      Utilities::MPI::max(max_local_velocity, this->mpi_communicator);
+
+    this->pcout << "   Max velocity (dimensionsless): " << max_global_velocity
+                << std::endl;
+    this->pcout << "   Max velocity (with dimensions): "
+                << max_global_velocity *
+                     parameters.reference_quantities.velocity
+                << " m/s" << std::endl;
+
+    return max_global_velocity;
   }
 
 
@@ -1098,7 +1103,13 @@ namespace Standard
             std::max(max_local_cfl, max_local_velocity / cell->diameter());
         }
 
-    return Utilities::MPI::max(max_local_cfl, this->mpi_communicator);
+    double max_global_cfl =
+      Utilities::MPI::max(max_local_cfl, this->mpi_communicator);
+
+    this->pcout << "   Max of local CFL numbers: " << max_local_cfl
+                << std::endl;
+
+    return max_global_cfl;
   }
 
 
@@ -1117,12 +1128,6 @@ namespace Standard
                              get_cfl_number()));
 
     const double maximal_velocity = get_maximal_velocity();
-
-    this->pcout << "   Max velocity (dimensionsless): " << maximal_velocity
-                << std::endl;
-    this->pcout << "   Max velocity (with dimensions): "
-                << maximal_velocity * parameters.reference_quantities.velocity
-                << " m/s" << std::endl;
 
     this->pcout << "   New Time step (dimensionsless): " << parameters.time_step
                 << std::endl;
@@ -1170,7 +1175,10 @@ namespace Standard
         PrimitiveVectorMemory<LA::MPI::BlockVector> mem;
         unsigned int                                n_iterations = 0;
         const double  solver_tolerance = 1e-8 * nse_rhs.l2_norm();
-        SolverControl solver_control(30, solver_tolerance);
+        SolverControl solver_control(/* n_max_iter */ 40,
+                                     solver_tolerance,
+                                     /* log_history */ true,
+                                     /* log_result */ true);
 
         /*
          * We have only the actual pressure but need
@@ -1213,7 +1221,9 @@ namespace Standard
                              true);
 
             SolverControl solver_control_refined(nse_matrix.m(),
-                                                 solver_tolerance);
+                                                 solver_tolerance,
+                                                 /* log_history */ true,
+                                                 /* log_result */ true);
 
             SolverFGMRES<LA::MPI::BlockVector> solver(
               solver_control_refined,
@@ -1838,8 +1848,26 @@ namespace Standard
     double time_index = 0;
     do
       {
+        if ((timestep_number > 0) &&
+            (timestep_number % parameters.NSE_solver_interval == 0) &&
+            parameters.adapt_time_step)
+          {
+            recompute_time_step();
+          }
+        else
+          {
+            /*
+             * This is just informative output
+             */
+            get_cfl_number();
+            get_maximal_velocity();
+          }
+
         this->pcout << "----------------------------------------" << std::endl
                     << "Time step " << timestep_number << ":  t=" << time_index
+                    << " -> t=" << time_index + parameters.time_step
+                    << "  (dt=" << parameters.time_step
+                    << " | final time=" << parameters.final_time << ")"
                     << std::endl;
 
         if (timestep_number == 0)
@@ -1852,8 +1880,6 @@ namespace Standard
         else if ((timestep_number > 0) &&
                  (timestep_number % parameters.NSE_solver_interval == 0))
           {
-            recompute_time_step();
-
             assemble_nse_system(time_index);
 
             if (!parameters.use_schur_complement_solver)

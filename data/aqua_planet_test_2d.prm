@@ -9,24 +9,27 @@ subsection Boussinesq Model
 		set cuboid geometry = false
 	end
 	
-	subsection Reference quantities		
+	subsection Reference quantities
 		# Standard: 10 [m/s]
-		set velocity = 10
+		set velocity = 0.1
 		
 		# Standard: 1e+4 [m]
-		set length = 1e+4
+		set length = 0.1
 		
 		# Standard: 273.15 [K]
-		set temperature = 273.15
+		set temperature = 2
 		
 		# Standard: 5 [K]
-		set temperature_change = 5
+		set temperature change = 0.5
 	end
 
 	set space dimension = 2
 
-	set final time = 15
-	set time step = 0.1
+	set final time = 1
+	set time step = 0.01
+	
+	# Flag to adapt time step by recomputing the CFL number
+	set adapt time step = false
 
 	set nse theta = 0.5
 	set nse velocity degree = 2
@@ -35,6 +38,9 @@ subsection Boussinesq Model
 	# pairings and solvers appropriate 
 	# for H(curl)-H(div)-L2 elements
 	set use FEEC solver = false
+	
+	set use block preconditioner feec = true
+	set correct pressure to zero mean = true
 	
 	# only valid for standard H1-L2 elements
 	set use locally conservative discretization = false
@@ -54,12 +60,12 @@ subsection Boussinesq Model
 	set temperature degree = 2
 	
 	# Base name of outputfile
-  	set filename output = boussinesq
-  	
-  	# Name of outputfile without ending
-  	set dirname output = data-output
-  	
-  	# Output some info on MPI processes
+	set filename output = boussinesq
+	
+	# Name of outputfile without ending
+	set dirname output = data-output-2d
+	
+	# Output some info on MPI processes
 	# (Each MPI process says hello. 
 	# Careful with many processes)
 	set hello from cluster = true
@@ -71,61 +77,61 @@ subsection Physical Constants
 	# Average atmosphere pressure
 	#
 	# Standard: 1.01325e+5 [Pa]
-	set average atm pressure = 1.01325e+5
+	set average atm pressure = 1
 	
 	# Planetary angular velocity
 	#
 	# Standard: 7.272205e-5 [1/s]
-  	set omega = 7.272205e-5
-  		
+	set omega = 0.5
+		
 	# Air density
 	#
 	# Standard: 1.29 [kg / m^3]
-	set density = 1.29
+	set density = 1
 
-	# Universal gas constant.
-	#
-	# Unit: [J/(mol*K)]
+    # Universal gas constant.
+    #
+    # Unit: [J/(mol*K)]
     # Standard: 8.31446261815324 
-    set universal_gas_constant = 8.31446261815324
+    set universal gas constant = 1
 
     # Specific gas constant of dry air.
     #
     # Unit: [J/(kg*K)]     
     # Standard: 287
-    set specific_gas_constant_dry = 287
+    set specific gas constant dry = 1
     
     # Thermal expansion coefficient.
     #
     # Unit: [1/K]     
     # Standard: 1/273.15 ~= 0.003661 (ideal gas)
-    set expansion_coefficient = 0.003661
+    set expansion coefficient = 0.2
 
     # Dynamic viscosity (eta or mu) of air at bottom reference
     # temperature.     
     #
     # Unit: [kg/(m*s)]
     # Standard: 1.82e-5
-    set dynamic_viscosity = 1.82e-5
+    set dynamic viscosity = 1.0e-3
 
     # Specific heat capacity of air under constant pressure.
     #
     # Unit: [J / (K*kg)]     
     # Standard: 1.005
-    set specific_heat_p = 1.005
+    set specific heat p = 1
 
     # Specific heat capacity of air under isochoric changes of state.
     #
     # Unit: [J / (K*kg)]
     # Standard: 0.718
-    set specific_heat_v = 0.718
+    set specific heat v = 1
 
     # Thermal conductivity (kappa, k or lambda) of air at bottom reference
     # temperature.
     #
     # Unit: [W/(m*K)]
     # Standard: 2.62e-2
-    set thermal_conductivity = 2.62e-2
+    set thermal conductivity = 1e-3
 
     # A good part of the earth's heat loss through the surface is due
     # to the decay of radioactive elements (uranium, thorium,
@@ -133,29 +139,29 @@ subsection Physical Constants
     #
     # Unit: [W / kg]
     # Standard: 7.4e-12
-    set radiogenic_heating = 7.4e-12
+    set radiogenic heating = 7.4e-12
 
     # Gravity constant.
     #
     # Unit: [m/s^2]
     # Standard: 9.81
-    set gravity_constant = 9.81
+    set gravity constant = 1
 
     # Speed of sound.
     #
     # Unit: [m/s]
     # Standard: 331.5
-    set speed_of_sound = 331.5
+    set speed of sound = 1
 
     # Height of atmosphere (up to mesosphere)
     #
     # Unit: [m]
     # Standard: 1.0e+5
-    set atm_height = 1.0e+5
+    set atm height = 2
 
     # Inner earth radius
     #
     # Unit: [m]     
     # Standard:  6.371000e+6
-    set R0 = 6.371000e+6
+    set R0 = 1
 end

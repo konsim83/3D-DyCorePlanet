@@ -24,6 +24,7 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <vector>
 
 
 // DyCorePlanet headers
@@ -69,8 +70,6 @@ protected:
   double     inner_radius, outer_radius;
 
   double global_Omega_diameter;
-
-  SphericalManifold<dim> boundary_description;
 
   /*!
    * Sets the domain geometry to cuboid. All directions are periodic apart from

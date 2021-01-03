@@ -61,6 +61,32 @@ namespace ExteriorCalculus
     namespace Scratch
     {
       ////////////////////////////////////
+      /// NSE Preconditioner
+      ////////////////////////////////////
+
+      template <int dim>
+      struct NSEPreconditioner
+      {
+        NSEPreconditioner(const double              time_step,
+                          const double              time_index,
+                          const FiniteElement<dim> &nse_fe,
+                          const Quadrature<dim> &   nse_quadrature,
+                          const UpdateFlags         nse_update_flags);
+
+        NSEPreconditioner(const NSEPreconditioner<dim> &data);
+
+        FEValues<dim> nse_fe_values;
+
+
+        std::vector<Tensor<1, dim>> grad_phi_p;
+        std::vector<double>         phi_p;
+
+        const double time_step;
+        const double time_index;
+      };
+
+
+      ////////////////////////////////////
       /// NSE system
       ////////////////////////////////////
 
@@ -70,7 +96,7 @@ namespace ExteriorCalculus
         NSESystem(const double              time_step,
                   const double              time_index,
                   const FiniteElement<dim> &nse_fe,
-                  const Mapping<dim> &      mapping,
+                  const Mapping<dim> &      temperature_mapping,
                   const Quadrature<dim> &   nse_quadrature,
                   const UpdateFlags         nse_update_flags,
                   const FiniteElement<dim> &temperature_fe,
@@ -106,7 +132,7 @@ namespace ExteriorCalculus
         TemperatureMatrix(const double              time_step,
                           const double              time_index,
                           const FiniteElement<dim> &temperature_fe,
-                          const Mapping<dim> &      mapping,
+                          const Mapping<dim> &      temperature_mapping,
                           const Quadrature<dim> &   temperature_quadrature);
 
         TemperatureMatrix(const TemperatureMatrix<dim> &data);
@@ -132,7 +158,7 @@ namespace ExteriorCalculus
                        const double              time_index,
                        const FiniteElement<dim> &temperature_fe,
                        const FiniteElement<dim> &nse_fe,
-                       const Mapping<dim> &      mapping,
+                       const Mapping<dim> &      temperature_mapping,
                        const Quadrature<dim> &   quadrature);
 
         TemperatureRHS(const TemperatureRHS<dim> &data);
@@ -157,6 +183,26 @@ namespace ExteriorCalculus
 
     namespace CopyData
     {
+      ////////////////////////////////////
+      /// NSE precon copy
+      ////////////////////////////////////
+
+      template <int dim>
+      struct NSEPreconditioner
+      {
+        NSEPreconditioner(const FiniteElement<dim> &nse_fe);
+
+        NSEPreconditioner(const NSEPreconditioner<dim> &data);
+
+        NSEPreconditioner<dim> &
+        operator=(const NSEPreconditioner<dim> &) = default;
+
+        FullMatrix<double>                   local_matrix;
+        std::vector<types::global_dof_index> local_dof_indices;
+      };
+
+
+
       ////////////////////////////////////
       /// NSE system copy
       ////////////////////////////////////
@@ -219,22 +265,13 @@ namespace ExteriorCalculus
  * meaning of curls is different there. This needs template specialization that
  * is not implemented yet..
  */
-// extern template class ExteriorCalculus::Assembly::Scratch::NSESystem<2>;
-// extern template class
-// ExteriorCalculus::Assembly::Scratch::TemperatureMatrix<2>; extern template
-// class ExteriorCalculus::Assembly::Scratch::TemperatureRHS<2>;
-//
-// extern template class ExteriorCalculus::Assembly::CopyData::NSESystem<2>;
-// extern template class
-// ExteriorCalculus::Assembly::CopyData::TemperatureMatrix<
-//  2>;
-// extern template class
-// ExteriorCalculus::Assembly::CopyData::TemperatureRHS<2>;
-
+extern template class ExteriorCalculus::Assembly::Scratch::NSEPreconditioner<3>;
 extern template class ExteriorCalculus::Assembly::Scratch::NSESystem<3>;
 extern template class ExteriorCalculus::Assembly::Scratch::TemperatureMatrix<3>;
 extern template class ExteriorCalculus::Assembly::Scratch::TemperatureRHS<3>;
 
+extern template class ExteriorCalculus::Assembly::CopyData::NSEPreconditioner<
+  3>;
 extern template class ExteriorCalculus::Assembly::CopyData::NSESystem<3>;
 extern template class ExteriorCalculus::Assembly::CopyData::TemperatureMatrix<
   3>;

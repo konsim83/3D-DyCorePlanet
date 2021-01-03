@@ -9,18 +9,12 @@ DYCOREPLANET_OPEN_NAMESPACE
  * meaning of curls is different there. This needs template specialization that
  * is not implemented yet..
  */
-// template class ExteriorCalculus::Assembly::Scratch::NSESystem<2>;
-// template class ExteriorCalculus::Assembly::Scratch::TemperatureMatrix<2>;
-// template class ExteriorCalculus::Assembly::Scratch::TemperatureRHS<2>;
-//
-// template class ExteriorCalculus::Assembly::CopyData::NSESystem<2>;
-// template class ExteriorCalculus::Assembly::CopyData::TemperatureMatrix<2>;
-// template class ExteriorCalculus::Assembly::CopyData::TemperatureRHS<2>;
-
+template class ExteriorCalculus::Assembly::Scratch::NSEPreconditioner<3>;
 template class ExteriorCalculus::Assembly::Scratch::NSESystem<3>;
 template class ExteriorCalculus::Assembly::Scratch::TemperatureMatrix<3>;
 template class ExteriorCalculus::Assembly::Scratch::TemperatureRHS<3>;
 
+template class ExteriorCalculus::Assembly::CopyData::NSEPreconditioner<3>;
 template class ExteriorCalculus::Assembly::CopyData::NSESystem<3>;
 template class ExteriorCalculus::Assembly::CopyData::TemperatureMatrix<3>;
 template class ExteriorCalculus::Assembly::CopyData::TemperatureRHS<3>;

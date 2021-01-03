@@ -148,6 +148,132 @@ namespace LinearAlgebra
     relevant_inverse_matrix->vmult(tmp2, tmp1);
     block_10->vmult(dst, tmp2);
   }
+
+
+  template <typename BlockMatrixType,
+            typename VectorType,
+            typename InverseMatrixType,
+            typename ApproxInverseMatrixType>
+  class SchurComplementLowerBlock : public Subscriptor
+  {
+  private:
+    using BlockType = typename BlockMatrixType::BlockType;
+
+  public:
+    /*!
+     * Constructor.
+     */
+    SchurComplementLowerBlock(
+      const BlockMatrixType &        system_matrix,
+      const InverseMatrixType &      relevant_inverse_matrix,
+      const ApproxInverseMatrixType &relevant_approx_inverse_matrix,
+      const std::vector<IndexSet> &  owned_partitioning,
+      const bool                     do_full_solve,
+      MPI_Comm                       mpi_communicator);
+
+    /*!
+     * Matrix-vector product.
+     *
+     * @param dst
+     * @param src
+     */
+    void
+    vmult(VectorType &dst, const VectorType &src) const;
+
+  private:
+    /*!
+     * Smart pointer to system matrix block 12.
+     */
+    const SmartPointer<const BlockType> block_12;
+
+    /*!
+     * Smart pointer to system matrix block 21.
+     */
+    const SmartPointer<const BlockType> block_21;
+
+    /*!
+     * Smart pointer to inverse upper left block of the system matrix.
+     */
+    const SmartPointer<const InverseMatrixType> relevant_inverse_matrix;
+
+    const SmartPointer<const ApproxInverseMatrixType>
+      relevant_approx_inverse_matrix;
+
+    /*!
+     * Index set to initialize tmp vectors using only locally owned partition.
+     */
+    const std::vector<IndexSet> &owned_partitioning;
+
+    const bool do_full_solve;
+
+    /*!
+     * Current MPI communicator.
+     */
+    MPI_Comm mpi_communicator;
+
+    /*!
+     * Muatable types for temporary vectors.
+     */
+    mutable VectorType tmp1, tmp2;
+  };
+
+
+  ///////////////////////////////////////
+  /// Implementation
+  ///////////////////////////////////////
+
+
+  template <typename BlockMatrixType,
+            typename VectorType,
+            typename InverseMatrixType,
+            typename ApproxInverseMatrixType>
+  SchurComplementLowerBlock<BlockMatrixType,
+                            VectorType,
+                            InverseMatrixType,
+                            ApproxInverseMatrixType>::
+    SchurComplementLowerBlock(
+      const BlockMatrixType &        system_matrix,
+      const InverseMatrixType &      relevant_inverse_matrix,
+      const ApproxInverseMatrixType &relevant_approx_inverse_matrix,
+      const std::vector<IndexSet> &  owned_partitioning,
+      const bool                     do_full_solve,
+      MPI_Comm                       mpi_communicator)
+    : block_12(&(system_matrix.block(1, 2)))
+    , block_21(&(system_matrix.block(2, 1)))
+    , relevant_inverse_matrix(&relevant_inverse_matrix)
+    , relevant_approx_inverse_matrix(&relevant_approx_inverse_matrix)
+    , owned_partitioning(owned_partitioning)
+    , do_full_solve(do_full_solve)
+    , mpi_communicator(mpi_communicator)
+    , tmp1(owned_partitioning[1], mpi_communicator)
+    , tmp2(owned_partitioning[1], mpi_communicator)
+  {}
+
+  template <typename BlockMatrixType,
+            typename VectorType,
+            typename InverseMatrixType,
+            typename ApproxInverseMatrixType>
+  void
+  SchurComplementLowerBlock<BlockMatrixType,
+                            VectorType,
+                            InverseMatrixType,
+                            ApproxInverseMatrixType>::vmult(VectorType &dst,
+                                                            const VectorType
+                                                              &src) const
+  {
+    if (do_full_solve == true)
+      {
+        block_12->vmult(tmp1, src);
+        relevant_inverse_matrix->vmult(tmp2, tmp1);
+        block_21->vmult(dst, tmp2);
+      }
+    else
+      {
+        block_12->vmult(tmp1, src);
+        relevant_approx_inverse_matrix->vmult(tmp2, tmp1);
+        block_21->vmult(dst, tmp2);
+      }
+  }
 } // end namespace LinearAlgebra
 
 DYCOREPLANET_CLOSE_NAMESPACE
