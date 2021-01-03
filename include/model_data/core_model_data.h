@@ -1,5 +1,11 @@
 #pragma once
 
+// Deal.ii
+#include <deal.II/base/function.h>
+#include <deal.II/base/numbers.h>
+#include <deal.II/base/tensor.h>
+#include <deal.II/base/tensor_function.h>
+
 // AquaPlanet
 #include <base/config.h>
 #include <model_data/physical_constants.h>
@@ -16,6 +22,47 @@ DYCOREPLANET_OPEN_NAMESPACE
  */
 namespace CoreModelData
 {
+  template <int dim>
+  class TangentialFunction : public TensorFunction<1, dim>
+  {
+  public:
+    TangentialFunction(const double scale_factor);
+
+    virtual Tensor<1, dim>
+    value(const Point<dim> &p) const override;
+
+    virtual void
+    value_list(const std::vector<Point<dim>> &points,
+               std::vector<Tensor<1, dim>> &  values) const override;
+
+  private:
+    const double scale_factor;
+
+    /*!
+     * Euler angles
+     */
+    const double alpha_, beta_, gamma_;
+
+    Tensor<2, dim> rotation;
+  };
+
+  template <int dim>
+  class RadialFunction : public TensorFunction<1, dim>
+  {
+  public:
+    RadialFunction(const double scale_factor);
+
+    virtual Tensor<1, dim>
+    value(const Point<dim> &p) const override;
+
+    virtual void
+    value_list(const std::vector<Point<dim>> &points,
+               std::vector<Tensor<1, dim>> &  values) const override;
+
+  private:
+    const double scale_factor;
+  };
+
   /*!
    * Return the Reynolds number of the flow.
    */
@@ -134,6 +181,12 @@ namespace CoreModelData
 /*
  * Extern template instantiations
  */
+extern template class CoreModelData::TangentialFunction<2>;
+extern template class CoreModelData::TangentialFunction<3>;
+
+extern template class CoreModelData::RadialFunction<2>;
+extern template class CoreModelData::RadialFunction<3>;
+
 extern template Tensor<1, 2>
 CoreModelData::vertical_gravity_vector<2>(const Point<2> &p,
                                           const double    gravity_constant);

@@ -9,6 +9,39 @@ namespace ExteriorCalculus
     namespace Scratch
     {
       ////////////////////////////////////
+      /// NSE Preconditioner
+      ////////////////////////////////////
+
+      template <int dim>
+      NSEPreconditioner<dim>::NSEPreconditioner(
+        const double              time_step,
+        const double              time_index,
+        const FiniteElement<dim> &nse_fe,
+        const Quadrature<dim> &   nse_quadrature,
+        const UpdateFlags         nse_update_flags)
+        : nse_fe_values(nse_fe, nse_quadrature, nse_update_flags)
+        , grad_phi_p(nse_fe.dofs_per_cell)
+        , phi_p(nse_fe.dofs_per_cell)
+        , time_step(time_step)
+        , time_index(time_index)
+      {}
+
+
+      template <int dim>
+      NSEPreconditioner<dim>::NSEPreconditioner(
+        const NSEPreconditioner<dim> &scratch)
+        : nse_fe_values(scratch.nse_fe_values.get_fe(),
+                        scratch.nse_fe_values.get_quadrature(),
+                        scratch.nse_fe_values.get_update_flags())
+        , grad_phi_p(scratch.grad_phi_p)
+        , phi_p(scratch.phi_p)
+        , time_step(scratch.time_step)
+        , time_index(scratch.time_index)
+      {}
+
+
+
+      ////////////////////////////////////
       /// NSE system
       ////////////////////////////////////
 
@@ -153,6 +186,26 @@ namespace ExteriorCalculus
 
     namespace CopyData
     {
+      ////////////////////////////////////
+      /// NSE precon copy
+      ////////////////////////////////////
+
+      template <int dim>
+      NSEPreconditioner<dim>::NSEPreconditioner(
+        const FiniteElement<dim> &nse_fe)
+        : local_matrix(nse_fe.dofs_per_cell, nse_fe.dofs_per_cell)
+        , local_dof_indices(nse_fe.dofs_per_cell)
+      {}
+
+
+      template <int dim>
+      NSEPreconditioner<dim>::NSEPreconditioner(
+        const NSEPreconditioner<dim> &data)
+        : local_matrix(data.local_matrix)
+        , local_dof_indices(data.local_dof_indices)
+      {}
+
+
       ////////////////////////////////////
       /// NSE system copy
       ////////////////////////////////////

@@ -56,7 +56,7 @@ CoreModelData::ReferenceQuantities::declare_parameters(ParameterHandler &prm)
                         Patterns::Double(0),
                         "Reference temperature at bottom.");
 
-      prm.declare_entry("temperature_change",
+      prm.declare_entry("temperature change",
                         "5",
                         Patterns::Double(0),
                         "Reference temperature change.");
@@ -78,7 +78,7 @@ CoreModelData::ReferenceQuantities::parse_parameters(ParameterHandler &prm)
       velocity           = prm.get_double("velocity");           /* m/s */
       length             = prm.get_double("length");             /* m */
       temperature_ref    = prm.get_double("temperature");        /* K */
-      temperature_change = prm.get_double("temperature_change"); /* K */
+      temperature_change = prm.get_double("temperature change"); /* K */
     }
     prm.leave_subsection();
   }

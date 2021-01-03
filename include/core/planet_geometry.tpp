@@ -19,7 +19,6 @@ PlanetGeometry<dim>::PlanetGeometry(double inner_radius,
   , center(Point<dim>()) // origin
   , inner_radius(inner_radius)
   , outer_radius(outer_radius)
-  , boundary_description(center)
   , cuboid_geometry(false)
 {
   TimerOutput::Scope timing_section(
@@ -54,26 +53,41 @@ PlanetGeometry<dim>::PlanetGeometry(double inner_radius,
                                             /*direction*/ d,
                                             periodicity_vector);
         }
-
-      triangulation.add_periodicity(periodicity_vector);
     }
   else
     {
-      GridGenerator::hyper_shell(triangulation,
-                                 center,
-                                 inner_radius,
-                                 outer_radius,
-                                 /* n_cells */ 0,
-                                 /* colorize */ true);
-
-      triangulation.set_all_manifold_ids_on_boundary(0);
-      triangulation.set_manifold(0, boundary_description);
-
-      typename Triangulation<dim>::active_cell_iterator
-        cell = triangulation.begin_active(),
-        endc = triangulation.end();
-      for (; cell != endc; ++cell)
-        cell->set_all_manifold_ids(0);
+      if (true)
+        {
+          GridGenerator::hyper_shell(triangulation,
+                                     center,
+                                     inner_radius,
+                                     outer_radius,
+                                     /* n_cells */ (dim == 3) ? 6 : 12,
+                                     /* colorize */ true);
+          //          GridGenerator::hyper_ball(
+          //            triangulation,
+          //            center,
+          //            outer_radius,
+          //            /* attach_spherical_manifold_on_boundary_cells */ true);
+        }
+      else
+        {
+          Point<dim> p0, p1;
+          p0(0) = -3;
+          p0(1) = -3;
+          p1(0) = 3;
+          p1(1) = 3;
+          if (dim == 3)
+            {
+              p0(2) = -3;
+              p1(2) = 3;
+            }
+          center = 0.5 * (p0 + p1);
+          GridGenerator::hyper_rectangle(triangulation,
+                                         p0,
+                                         p1,
+                                         /* colorize */ true);
+        }
     }
 
   global_Omega_diameter = GridTools::diameter(triangulation);

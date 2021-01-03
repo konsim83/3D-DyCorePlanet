@@ -9,11 +9,14 @@ CoreModelData::Parameters::Parameters(const std::string &parameter_filename)
   , physical_constants(parameter_filename)
   , final_time(1.0)
   , time_step(0.1)
+  , adapt_time_step(false)
   , initial_global_refinement(2)
   , cuboid_geometry(false)
   , nse_theta(0.5)
   , nse_velocity_degree(2)
   , use_FEEC_solver(false)
+  , use_block_preconditioner_feec(true)
+  , correct_pressure_to_zero_mean(false)
   , use_locally_conservative_discretization(true)
   , solver_diagnostics_print_level(1)
   , use_schur_complement_solver(true)
@@ -85,6 +88,12 @@ CoreModelData::Parameters::declare_parameters(ParameterHandler &prm)
                       Patterns::Double(0),
                       "Time step size.");
 
+
+    prm.declare_entry("adapt time step",
+                      "false",
+                      Patterns::Bool(),
+                      "Flag to adapt time step by recomputing the CFL number");
+
     prm.declare_entry("nse theta",
                       "0.5",
                       Patterns::Double(0.0, 1.0),
@@ -100,7 +109,18 @@ CoreModelData::Parameters::declare_parameters(ParameterHandler &prm)
       "use FEEC solver",
       "false",
       Patterns::Bool(),
-      "Replace standard H1-L2 elements with	pairings and solvers appropriate for H(curl)-H(div)-L2 elements.");
+      "Replace standard H1-L2 elements with	pairings "
+      "and solvers appropriate for H(curl)-H(div)-L2 elements.");
+
+    prm.declare_entry("use block preconditioner feec",
+                      "true",
+                      Patterns::Bool(),
+                      "Use a block preconditioner for the FEEC system.");
+
+    prm.declare_entry("correct pressure to zero mean",
+                      "false",
+                      Patterns::Bool(),
+                      "Use pressure correction for certain types of BCs.");
 
     prm.declare_entry(
       "use locally conservative discretization",
@@ -184,10 +204,18 @@ CoreModelData::Parameters::parse_parameters(ParameterHandler &prm)
     final_time = prm.get_double("final time");
     time_step  = prm.get_double("time step");
 
+    adapt_time_step = use_FEEC_solver = prm.get_bool("adapt time step");
+
     nse_theta           = prm.get_double("nse theta");
     nse_velocity_degree = prm.get_integer("nse velocity degree");
 
     use_FEEC_solver = prm.get_bool("use FEEC solver");
+
+    use_block_preconditioner_feec =
+      prm.get_bool("use block preconditioner feec");
+
+    correct_pressure_to_zero_mean =
+      prm.get_bool("correct pressure to zero mean");
 
     use_locally_conservative_discretization =
       prm.get_bool("use locally conservative discretization");

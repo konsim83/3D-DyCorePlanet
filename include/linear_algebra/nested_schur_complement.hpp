@@ -1,7 +1,10 @@
 #pragma once
 
 // Deal.ii
+#include <deal.II/base/quadrature_lib.h>
 #include <deal.II/base/subscriptor.h>
+
+#include <deal.II/numerics/vector_tools.h>
 
 // STL
 #include <memory>
@@ -51,7 +54,8 @@ namespace LinearAlgebra
    */
   template <typename BlockMatrixType,
             typename VectorType,
-            typename InverseMatrixType>
+            typename InverseMatrixType,
+            typename DoFHandlerType>
   class NestedSchurComplement : public Subscriptor
   {
   private:
@@ -72,6 +76,7 @@ namespace LinearAlgebra
     NestedSchurComplement(const BlockMatrixType &      system_matrix,
                           const InverseMatrixType &    relevant_inverse_matrix,
                           const std::vector<IndexSet> &owned_partitioning,
+                          DoFHandlerType &             dof_handler,
                           MPI_Comm                     mpi_communicator);
 
     /*!
@@ -104,6 +109,11 @@ namespace LinearAlgebra
      */
     const std::vector<IndexSet> &owned_partitioning;
 
+    /*
+     * DofHandler object is necessary to compute the mean value
+     */
+    DoFHandlerType dof_handler;
+
     /*!
      * Current MPI communicator.
      */
@@ -123,32 +133,177 @@ namespace LinearAlgebra
 
   template <typename BlockMatrixType,
             typename VectorType,
-            typename InverseMatrixType>
-  NestedSchurComplement<BlockMatrixType, VectorType, InverseMatrixType>::
+            typename InverseMatrixType,
+            typename DoFHandlerType>
+  NestedSchurComplement<BlockMatrixType,
+                        VectorType,
+                        InverseMatrixType,
+                        DoFHandlerType>::
     NestedSchurComplement(const BlockMatrixType &      system_matrix,
                           const InverseMatrixType &    relevant_inverse_matrix,
                           const std::vector<IndexSet> &owned_partitioning,
+                          DoFHandlerType &             _dof_handler,
                           MPI_Comm                     mpi_communicator)
     : block_12(&(system_matrix.block(1, 2)))
     , block_21(&(system_matrix.block(2, 1)))
     , relevant_inverse_matrix(&relevant_inverse_matrix)
     , owned_partitioning(owned_partitioning)
+    , dof_handler(_dof_handler.get_triangulation())
     , mpi_communicator(mpi_communicator)
     , tmp1(owned_partitioning[1], mpi_communicator)
     , tmp2(owned_partitioning[1], mpi_communicator)
-  {}
+  {
+    FEValuesExtractors::Scalar pressure_components(2 * 3);
+    const auto &               nse_fe(_dof_handler.get_fe());
+    ComponentMask pressure_mask(nse_fe.component_mask(pressure_components));
+    const auto &  pressure_fe(nse_fe.get_sub_fe(pressure_mask));
+    dof_handler.distribute_dofs(pressure_fe);
+  }
 
   template <typename BlockMatrixType,
             typename VectorType,
-            typename InverseMatrixType>
+            typename InverseMatrixType,
+            typename DoFHandlerType>
   void
-  NestedSchurComplement<BlockMatrixType, VectorType, InverseMatrixType>::vmult(
-    VectorType &      dst,
-    const VectorType &src) const
+  NestedSchurComplement<BlockMatrixType,
+                        VectorType,
+                        InverseMatrixType,
+                        DoFHandlerType>::vmult(VectorType &      dst,
+                                               const VectorType &src) const
   {
     block_12->vmult(tmp1, src);
     relevant_inverse_matrix->vmult(tmp2, tmp1);
     block_21->vmult(dst, tmp2);
+    const double mean_value =
+      VectorTools::compute_mean_value(dof_handler, QGauss<3>(1), dst, 0);
+    dst.add(-mean_value);
+  }
+
+
+  /*!
+   * @class ApproxNestedSchurComplementInverse
+   *
+   * @tparam SchurComplementType
+   * @tparam VectorType
+   * @tparam DoFHandlerType
+   */
+  template <typename SchurComplementType,
+            typename VectorType,
+            typename DoFHandlerType>
+  class ApproxNestedSchurComplementInverse : public Subscriptor
+  {
+  public:
+    ApproxNestedSchurComplementInverse(
+      const SchurComplementType &  schur_complement_matrix,
+      const std::vector<IndexSet> &owned_partitioning,
+      DoFHandlerType &             dof_handler,
+      MPI_Comm                     mpi_communicator,
+      const bool                   correct_to_zero_mean);
+
+    /*!
+     * Matrix-vector product.
+     *
+     * @param dst
+     * @param src
+     */
+    void
+    vmult(VectorType &dst, const VectorType &src) const;
+
+  private:
+    /*!
+     * Smart pointer to system matrix block 00, pressure Laplace.
+     */
+    const SmartPointer<const SchurComplementType> approx_pressure_schur_compl;
+
+    /*!
+     * Index set to initialize tmp vectors using only locally owned partition.
+     */
+    const std::vector<IndexSet> &owned_partitioning;
+
+    /*
+     * DofHandler object is necessary to compute the mean value
+     */
+    DoFHandlerType dof_handler;
+
+    /*!
+     * Current MPI communicator.
+     */
+    MPI_Comm mpi_communicator;
+
+    const bool correct_to_zero_mean;
+  };
+
+
+  ///////////////////////////////////////
+  /// Implementation
+  ///////////////////////////////////////
+
+
+  template <typename SchurComplementType,
+            typename VectorType,
+            typename DoFHandlerType>
+  ApproxNestedSchurComplementInverse<SchurComplementType,
+                                     VectorType,
+                                     DoFHandlerType>::
+    ApproxNestedSchurComplementInverse(
+      const SchurComplementType &  approx_schur_complement_matrix,
+      const std::vector<IndexSet> &owned_partitioning,
+      DoFHandlerType &             _dof_handler,
+      MPI_Comm                     mpi_communicator,
+      const bool                   correct_to_zero_mean)
+    : approx_pressure_schur_compl(&approx_schur_complement_matrix)
+    , owned_partitioning(owned_partitioning)
+    , dof_handler(_dof_handler.get_triangulation())
+    , mpi_communicator(mpi_communicator)
+    , correct_to_zero_mean(correct_to_zero_mean)
+  {
+    if (correct_to_zero_mean)
+      {
+        FEValuesExtractors::Scalar pressure_components(2 * 3);
+        const auto &               nse_fe(_dof_handler.get_fe());
+        ComponentMask pressure_mask(nse_fe.component_mask(pressure_components));
+        const auto &  pressure_fe(nse_fe.get_sub_fe(pressure_mask));
+        dof_handler.distribute_dofs(pressure_fe);
+      }
+  }
+
+  template <typename SchurComplementType,
+            typename VectorType,
+            typename DoFHandlerType>
+  void
+  ApproxNestedSchurComplementInverse<SchurComplementType,
+                                     VectorType,
+                                     DoFHandlerType>::vmult(VectorType &dst,
+                                                            const VectorType
+                                                              &src) const
+  {
+    try
+      {
+        SolverControl solver_control(
+          /* maxiter */ 12,
+          // std::max(static_cast<std::size_t>(src.size()),
+          //                                     static_cast<std::size_t>(1000)),
+          1e-6 * src.l2_norm(),
+          /* log_history */ false,
+          /* log_result */ true);
+        SolverGMRES<VectorType> local_solver(solver_control);
+        local_solver.solve(*approx_pressure_schur_compl,
+                           dst,
+                           src,
+                           LA::PreconditionIdentity());
+      }
+    catch (std::exception &exc)
+      {
+        // std::cout << "Applied 15 pressure preconditioning iterations"
+        //           << std::endl;
+      }
+
+    if (correct_to_zero_mean)
+      {
+        const double mean_value =
+          VectorTools::compute_mean_value(dof_handler, QGauss<3>(1), dst, 0);
+        dst.add(-mean_value);
+      }
   }
 } // end namespace LinearAlgebra
 

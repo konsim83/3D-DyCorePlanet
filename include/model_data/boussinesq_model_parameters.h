@@ -32,8 +32,11 @@ namespace CoreModelData
     CoreModelData::ReferenceQuantities reference_quantities;
     CoreModelData::PhysicalConstants   physical_constants;
 
-    double       final_time;
-    double       time_step;
+    double final_time;
+    double time_step;
+
+    bool adapt_time_step;
+
     unsigned int initial_global_refinement;
 
     bool cuboid_geometry;
@@ -42,6 +45,8 @@ namespace CoreModelData
     unsigned int nse_velocity_degree;
 
     bool use_FEEC_solver;
+    bool use_block_preconditioner_feec;
+    bool correct_pressure_to_zero_mean;
 
     bool use_locally_conservative_discretization;
 

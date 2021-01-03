@@ -4,6 +4,12 @@
 
 DYCOREPLANET_OPEN_NAMESPACE
 
+template class CoreModelData::TangentialFunction<2>;
+template class CoreModelData::TangentialFunction<3>;
+
+template class CoreModelData::RadialFunction<2>;
+template class CoreModelData::RadialFunction<3>;
+
 template Tensor<1, 2>
 CoreModelData::vertical_gravity_vector<2>(const Point<2> &p,
                                           const double    gravity_constant);
