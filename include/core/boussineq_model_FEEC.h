@@ -295,6 +295,9 @@ namespace ExteriorCalculus
 
     class Postprocessor;
 
+    using VorticitySystemPreconType = LA::PreconditionAMG;
+    std::shared_ptr<VorticitySystemPreconType> vorticity_system_preconditioner;
+
     using MassPerconditionerType = LA::PreconditionJacobi;
     using MassInverseType =
       LinearAlgebra::InverseMatrix<LA::SparseMatrix, LA::PreconditionJacobi>;
@@ -333,7 +336,8 @@ namespace ExteriorCalculus
     using BlockSchurPreconditionerFEECType =
       LinearAlgebra::BlockSchurPreconditionerFEEC<
         // MassInverseType,
-        MassPerconditionerType, ApproxShiftedSchurComplementInverseType,
+        MassPerconditionerType,
+        ApproxShiftedSchurComplementInverseType,
         ApproxNesteSchurComplementInverseType>;
 
     std::shared_ptr<const BlockSchurPreconditionerFEECType> preconditioner_feec;

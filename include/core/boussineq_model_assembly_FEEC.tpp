@@ -20,7 +20,9 @@ namespace ExteriorCalculus
         const Quadrature<dim> &   nse_quadrature,
         const UpdateFlags         nse_update_flags)
         : nse_fe_values(nse_fe, nse_quadrature, nse_update_flags)
-        , grad_phi_p(nse_fe.dofs_per_cell)
+        , phi_w(nse_fe.dofs_per_cell)
+        , curl_phi_w(nse_fe.dofs_per_cell)
+        , phi_u(nse_fe.dofs_per_cell)
         , phi_p(nse_fe.dofs_per_cell)
         , time_step(time_step)
         , time_index(time_index)
@@ -33,7 +35,9 @@ namespace ExteriorCalculus
         : nse_fe_values(scratch.nse_fe_values.get_fe(),
                         scratch.nse_fe_values.get_quadrature(),
                         scratch.nse_fe_values.get_update_flags())
-        , grad_phi_p(scratch.grad_phi_p)
+        , phi_w(scratch.phi_w)
+        , curl_phi_w(scratch.curl_phi_w)
+        , phi_u(scratch.phi_u)
         , phi_p(scratch.phi_p)
         , time_step(scratch.time_step)
         , time_index(scratch.time_index)

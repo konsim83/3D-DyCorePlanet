@@ -147,12 +147,36 @@ namespace ExteriorCalculus
                                 this->mpi_communicator);
 
     Table<2, DoFTools::Coupling> coupling(2 * dim + 1, 2 * dim + 1);
+    //    for (unsigned int c = 0; c < 2 * dim + 1; ++c)
+    //      for (unsigned int d = 0; d < 2 * dim + 1; ++d)
+    //        if (c == d)
+    //          coupling[c][d] = DoFTools::always;
+    //        else
+    //          coupling[c][d] = DoFTools::none;
     for (unsigned int c = 0; c < 2 * dim + 1; ++c)
-      for (unsigned int d = 0; d < 2 * dim + 1; ++d)
-        if (c == d)
-          coupling[c][d] = DoFTools::always;
-        else
-          coupling[c][d] = DoFTools::none;
+      {
+        for (unsigned int d = 0; d < 2 * dim + 1; ++d)
+          {
+            if (c < dim)
+              {
+                if (d < 2 * dim - 1)
+                  coupling[c][d] = DoFTools::always;
+                else
+                  coupling[c][d] = DoFTools::none;
+              }
+            else if ((c >= dim) && (c < 2 * dim))
+              {
+                coupling[c][d] = DoFTools::always;
+              }
+            else if (c == 2 * dim)
+              {
+                if ((d >= dim) && (d < 2 * dim))
+                  coupling[c][d] = DoFTools::always;
+                else
+                  coupling[c][d] = DoFTools::none;
+              }
+          }
+      }
 
     DoFTools::make_sparsity_pattern(nse_dof_handler,
                                     coupling,
@@ -487,6 +511,8 @@ namespace ExteriorCalculus
     const unsigned int dofs_per_cell = nse_fe.dofs_per_cell;
     const unsigned int n_q_points = scratch.nse_fe_values.n_quadrature_points;
 
+    const FEValuesExtractors::Vector vorticity(0);
+    const FEValuesExtractors::Vector velocities(dim);
     const FEValuesExtractors::Scalar pressure(2 * dim);
 
     scratch.nse_fe_values.reinit(cell);
@@ -494,19 +520,43 @@ namespace ExteriorCalculus
     cell->get_dof_indices(data.local_dof_indices);
     data.local_matrix = 0;
 
+    const double one_over_reynolds_number =
+      (1. / CoreModelData::get_reynolds_number(
+              parameters.reference_quantities.velocity,
+              parameters.reference_quantities.length,
+              parameters.physical_constants.kinematic_viscosity));
+
+    std::vector<double> sign_change(dofs_per_cell, 1.0);
+    Tools::get_face_sign_change_raviart_thomas(cell, nse_fe, sign_change);
+
     for (unsigned int q = 0; q < n_q_points; ++q)
       {
         for (unsigned int k = 0; k < dofs_per_cell; ++k)
           {
+            scratch.phi_w[k] = scratch.nse_fe_values[vorticity].value(k, q);
+
+            scratch.curl_phi_w[k] = scratch.nse_fe_values[vorticity].curl(k, q);
+
+            scratch.phi_u[k] =
+              sign_change[k] * scratch.nse_fe_values[velocities].value(k, q);
+
             scratch.phi_p[k] = scratch.nse_fe_values[pressure].value(k, q);
           }
 
         for (unsigned int i = 0; i < dofs_per_cell; ++i)
           for (unsigned int j = 0; j < dofs_per_cell; ++j)
             data.local_matrix(i, j) +=
-              (-1) *
-              scalar_product(scratch.grad_phi_p[i], scratch.grad_phi_p[j]) *
-              scratch.nse_fe_values.JxW(q);
+              scratch.phi_w[i] * scratch.phi_w[j] +
+              parameters.time_step * one_over_reynolds_number *
+                scratch.curl_phi_w[i] * scratch.curl_phi_w[j] +
+              +(std::abs(scratch.phi_u[i] * scratch.curl_phi_w[j]) > 1.0e-9 ?
+                  1.0 :
+                  0.0) +
+              (std::abs(scratch.curl_phi_w[i] * scratch.phi_u[j]) > 1.0e-9 ?
+                 1.0 :
+                 0.0) +
+              scalar_product(scratch.phi_p[i], scratch.phi_p[j]) *
+                scratch.nse_fe_values.JxW(q);
       }
   }
 
@@ -574,34 +624,33 @@ namespace ExteriorCalculus
 
     assemble_nse_preconditioner(time_index);
 
-    //        std::vector<std::vector<bool>> constant_modes_pressure;
-    //        FEValuesExtractors::Scalar     pressure_component(2 * dim);
-    //        DoFTools::extract_constant_modes(nse_dof_handler,
-    //                                         nse_fe.component_mask(
-    //                                           pressure_component),
-    //                                         constant_modes_pressure);
-    //        pressure_system_preconditioner =
-    //          std::make_shared<PressureSystemPreconType>();
-    //        typename PressureSystemPreconType::AdditionalData
-    //          pressure_system_preconditioner_data;
-    //        /*
-    //         * This is relevant to AMG preconditioners
-    //         */
-    //        pressure_system_preconditioner_data.constant_modes =
-    //          constant_modes_pressure;
-    //        pressure_system_preconditioner_data.elliptic              = true;
-    //        pressure_system_preconditioner_data.higher_order_elements = false;
-    //        pressure_system_preconditioner_data.smoother_sweeps       = 1;
-    //        pressure_system_preconditioner_data.aggregation_threshold = 0.02;
+    std::vector<std::vector<bool>> constant_modes_vorticity;
+    FEValuesExtractors::Vector     vorticity_component(0);
+    DoFTools::extract_constant_modes(nse_dof_handler,
+                                     nse_fe.component_mask(vorticity_component),
+                                     constant_modes_vorticity);
+    vorticity_system_preconditioner =
+      std::make_shared<VorticitySystemPreconType>();
+    typename VorticitySystemPreconType::AdditionalData
+      vorticity_system_preconditioner_data;
+    /*
+     * This is relevant to AMG preconditioners
+     */
+    vorticity_system_preconditioner_data.constant_modes =
+      constant_modes_vorticity;
+    vorticity_system_preconditioner_data.elliptic              = true;
+    vorticity_system_preconditioner_data.higher_order_elements = false;
+    vorticity_system_preconditioner_data.smoother_sweeps       = 1;
+    vorticity_system_preconditioner_data.aggregation_threshold = 0.02;
 
-    // pressure_system_preconditioner =
-    //   std::make_shared<PressureSystemPreconType>();
-    // typename PressureSystemPreconType::AdditionalData
-    //   pressure_system_preconditioner_data;
+    vorticity_system_preconditioner =
+      std::make_shared<VorticitySystemPreconType>();
+    typename VorticitySystemPreconType::AdditionalData
+      vorticity_system_preconditioner_data;
 
-    // pressure_system_preconditioner->initialize(
-    //   nse_preconditioner_matrix.block(2, 2),
-    //   pressure_system_preconditioner_data);
+    vorticity_system_preconditioner->initialize(
+      nse_preconditioner_matrix.block(2, 2),
+      vorticity_system_preconditioner_data);
 
     this->pcout << std::endl;
   }
@@ -703,9 +752,8 @@ namespace ExteriorCalculus
                scratch.curl_phi_w[i] * scratch.phi_u[j] // rot_w term block(0,1)
                + scratch.phi_u[i] * scratch.phi_u[j] // mass_u term block(1,1)
                + parameters.time_step * one_over_reynolds_number *
-                   (scratch.phi_u[i] * scratch.curl_phi_w[j] +
-                    scratch.div_phi_u[i] *
-                      scratch.div_phi_u[j]) // 1/Re * v * curl(w) block(1,0)
+                   (scratch.phi_u[i] *
+                    scratch.curl_phi_w[j]) // 1/Re * v * curl(w) block(1,0)
                - (scratch.div_phi_u[i] *
                   scratch
                     .phi_p[j]) // div(v)*p ---> scaled pressure dt*p block(1,2)
@@ -2204,18 +2252,18 @@ namespace ExteriorCalculus
           {
             assemble_nse_system(time_index);
 
-            // if ((!parameters.use_schur_complement_solver) &&
-            //     (parameters.use_block_preconditioner_feec))
-            // build_nse_preconditioner(time_index);
+            if ((!parameters.use_schur_complement_solver) &&
+                (parameters.use_block_preconditioner_feec))
+              build_nse_preconditioner(time_index);
           }
         else if ((timestep_number > 0) &&
                  (timestep_number % parameters.NSE_solver_interval == 0))
           {
             assemble_nse_system(time_index);
 
-            // if ((!parameters.use_schur_complement_solver) &&
-            //     (parameters.use_block_preconditioner_feec))
-            // build_nse_preconditioner(time_index);
+            if ((!parameters.use_schur_complement_solver) &&
+                (parameters.use_block_preconditioner_feec))
+              build_nse_preconditioner(time_index);
           }
 
         assemble_temperature_matrix(time_index);
