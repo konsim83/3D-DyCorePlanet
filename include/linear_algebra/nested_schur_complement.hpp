@@ -297,7 +297,7 @@ namespace LinearAlgebra
           //                                     static_cast<std::size_t>(1000)),
           1e-6 * src.l2_norm(),
           /* log_history */ false,
-          /* log_result */ true);
+          /* log_result */ false);
         SolverGMRES<VectorType> local_solver(solver_control);
 
         local_solver.solve(*approx_pressure_schur_compl,

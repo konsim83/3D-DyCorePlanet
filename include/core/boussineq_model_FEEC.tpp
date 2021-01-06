@@ -166,27 +166,17 @@ namespace ExteriorCalculus
               }
             else if ((c >= dim) && (c < 2 * dim))
               {
-<<<<<<< HEAD
-                coupling[c][d] = DoFTools::always;
-=======
                 if (d == 2 * dim)
                   coupling[c][d] = DoFTools::none;
                 else
                   coupling[c][d] = DoFTools::always;
->>>>>>> 00430f00f73a5c6c4d7b6cb53f377627fb2df0de
               }
             else if (c == 2 * dim)
               {
                 if ((d >= dim) && (d < 2 * dim))
-<<<<<<< HEAD
-                  coupling[c][d] = DoFTools::always;
-                else
-                  coupling[c][d] = DoFTools::none;
-=======
                   coupling[c][d] = DoFTools::none;
                 else
                   coupling[c][d] = DoFTools::always;
->>>>>>> 00430f00f73a5c6c4d7b6cb53f377627fb2df0de
               }
           }
       }
@@ -558,20 +548,6 @@ namespace ExteriorCalculus
 
         for (unsigned int i = 0; i < dofs_per_cell; ++i)
           for (unsigned int j = 0; j < dofs_per_cell; ++j)
-<<<<<<< HEAD
-            data.local_matrix(i, j) +=
-              scratch.phi_w[i] * scratch.phi_w[j] +
-              parameters.time_step * one_over_reynolds_number *
-                scratch.curl_phi_w[i] * scratch.curl_phi_w[j] +
-              +(std::abs(scratch.phi_u[i] * scratch.curl_phi_w[j]) > 1.0e-9 ?
-                  1.0 :
-                  0.0) +
-              (std::abs(scratch.curl_phi_w[i] * scratch.phi_u[j]) > 1.0e-9 ?
-                 1.0 :
-                 0.0) +
-              scalar_product(scratch.phi_p[i], scratch.phi_p[j]) *
-                scratch.nse_fe_values.JxW(q);
-=======
             {
               const double phi_u_i_times_phi_w_j =
                 scratch.phi_u[i] * scratch.phi_w[j];
@@ -590,7 +566,6 @@ namespace ExteriorCalculus
                 scratch.phi_p[i] * scratch.phi_p[j] *
                   scratch.nse_fe_values.JxW(q);
             }
->>>>>>> 00430f00f73a5c6c4d7b6cb53f377627fb2df0de
       }
   }
 
@@ -677,18 +652,8 @@ namespace ExteriorCalculus
     vorticity_system_preconditioner_data.smoother_sweeps       = 1;
     vorticity_system_preconditioner_data.aggregation_threshold = 0.02;
 
-<<<<<<< HEAD
-    vorticity_system_preconditioner =
-      std::make_shared<VorticitySystemPreconType>();
-    typename VorticitySystemPreconType::AdditionalData
-      vorticity_system_preconditioner_data;
-
-    vorticity_system_preconditioner->initialize(
-      nse_preconditioner_matrix.block(2, 2),
-=======
     vorticity_system_preconditioner->initialize(
       nse_preconditioner_matrix.block(0, 0),
->>>>>>> 00430f00f73a5c6c4d7b6cb53f377627fb2df0de
       vorticity_system_preconditioner_data);
 
     this->pcout << std::endl;
@@ -1786,7 +1751,9 @@ namespace ExteriorCalculus
     this->pcout << "   Apply temperature solver..." << std::endl;
 
     SolverControl solver_control(temperature_matrix.m(),
-                                 1e-12 * temperature_rhs.l2_norm());
+                                 1e-12 * temperature_rhs.l2_norm(),
+                                 /* log_history */ false,
+                                 /* log_result */ false);
 
     SolverCG<LA::MPI::Vector> cg(solver_control);
 
