@@ -77,8 +77,9 @@ namespace ExteriorCalculus
 
         FEValues<dim> nse_fe_values;
 
-
-        std::vector<Tensor<1, dim>> grad_phi_p;
+        std::vector<Tensor<1, dim>> phi_w;
+        std::vector<Tensor<1, dim>> curl_phi_w;
+        std::vector<Tensor<1, dim>> phi_u;
         std::vector<double>         phi_p;
 
         const double time_step;

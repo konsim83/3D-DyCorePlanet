@@ -55,6 +55,7 @@
 
 // STL
 #include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <iostream>
 #include <limits>
@@ -295,6 +296,9 @@ namespace ExteriorCalculus
 
     class Postprocessor;
 
+    using VorticitySystemPreconType = LA::PreconditionAMG;
+    std::shared_ptr<VorticitySystemPreconType> vorticity_system_preconditioner;
+
     using MassPerconditionerType = LA::PreconditionJacobi;
     using MassInverseType =
       LinearAlgebra::InverseMatrix<LA::SparseMatrix, LA::PreconditionJacobi>;
@@ -307,6 +311,8 @@ namespace ExteriorCalculus
       LinearAlgebra::ApproxShiftedSchurComplementInverse<
         LA::BlockSparseMatrix,
         LA::MPI::Vector,
+        //        VorticitySystemPreconType,
+        MassPerconditionerType,
         MassPerconditionerType>;
     std::shared_ptr<ApproxShiftedSchurComplementInverseType>
       approx_Mu_minus_Sw_inverse;
@@ -333,7 +339,8 @@ namespace ExteriorCalculus
     using BlockSchurPreconditionerFEECType =
       LinearAlgebra::BlockSchurPreconditionerFEEC<
         // MassInverseType,
-        MassPerconditionerType, ApproxShiftedSchurComplementInverseType,
+        MassPerconditionerType,
+        ApproxShiftedSchurComplementInverseType,
         ApproxNesteSchurComplementInverseType>;
 
     std::shared_ptr<const BlockSchurPreconditionerFEECType> preconditioner_feec;

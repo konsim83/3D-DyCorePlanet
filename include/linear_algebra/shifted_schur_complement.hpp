@@ -60,14 +60,14 @@ namespace LinearAlgebra
      * Constructor. The user must take care to pass the correct inverse of the
      * upper left block of the system matrix.
      *
-     * @param system_matrix
+     * @param precon_matrix
      * 	Block Matrix
      * @param relevant_inverse_matrix
      * 	Inverse of upper left block of the system matrix.
      * @param owned_partitioning
      * @param mpi_communicator
      */
-    ShiftedSchurComplement(const BlockMatrixType &      system_matrix,
+    ShiftedSchurComplement(const BlockMatrixType &      precon_matrix,
                            const InverseMatrixType &    relevant_inverse_matrix,
                            const std::vector<IndexSet> &owned_partitioning,
                            MPI_Comm                     mpi_communicator);
@@ -82,6 +82,11 @@ namespace LinearAlgebra
     vmult(VectorType &dst, const VectorType &src) const;
 
   private:
+    /*!
+     * Smart pointer to system matrix block 00.
+     */
+    const SmartPointer<const BlockType> block_00;
+
     /*!
      * Smart pointer to system matrix block 01.
      */
@@ -128,13 +133,14 @@ namespace LinearAlgebra
             typename VectorType,
             typename InverseMatrixType>
   ShiftedSchurComplement<BlockMatrixType, VectorType, InverseMatrixType>::
-    ShiftedSchurComplement(const BlockMatrixType &      system_matrix,
+    ShiftedSchurComplement(const BlockMatrixType &      precon_matrix,
                            const InverseMatrixType &    relevant_inverse_matrix,
                            const std::vector<IndexSet> &owned_partitioning,
                            MPI_Comm                     mpi_communicator)
-    : block_01(&(system_matrix.block(0, 1)))
-    , block_10(&(system_matrix.block(1, 0)))
-    , block_11(&(system_matrix.block(1, 1)))
+    : block_00(&(precon_matrix.block(0, 0)))
+    , block_01(&(precon_matrix.block(0, 1)))
+    , block_10(&(precon_matrix.block(1, 0)))
+    , block_11(&(precon_matrix.block(1, 1)))
     , relevant_inverse_matrix(&relevant_inverse_matrix)
     , owned_partitioning(owned_partitioning)
     , mpi_communicator(mpi_communicator)
@@ -152,8 +158,15 @@ namespace LinearAlgebra
   {
     block_11->vmult(dst, src);
     block_01->vmult(tmp1, src);
-    relevant_inverse_matrix->vmult(tmp2, tmp1);
-    tmp2 *= -1;
+    if (/* H(div) volticity */ false)
+      {
+        block_00->vmult(tmp2, tmp1);
+      }
+    else
+      {
+        relevant_inverse_matrix->vmult(tmp2, tmp1);
+        tmp2 *= -1;
+      }
     block_10->vmult_add(dst, tmp2);
   }
 
@@ -161,7 +174,8 @@ namespace LinearAlgebra
 
   template <typename BlockMatrixType,
             typename VectorType,
-            typename InverseMatrixType>
+            typename InverseMatrixTypeW,
+            typename InverseMatrixTypeU>
   class ApproxShiftedSchurComplementInverse : public Subscriptor
   {
   private:
@@ -169,10 +183,9 @@ namespace LinearAlgebra
 
   public:
     ApproxShiftedSchurComplementInverse(
-      const BlockMatrixType &      system_matrix,
-      const InverseMatrixType &    mass_w_inverse,
-      const InverseMatrixType &    mass_u_inverse,
-      const unsigned int           n_neumann_terms,
+      const BlockMatrixType &      precon_matrix,
+      const InverseMatrixTypeW &   mass_w_inverse,
+      const InverseMatrixTypeU &   mass_u_inverse,
       const std::vector<IndexSet> &owned_partitioning,
       MPI_Comm                     mpi_communicator);
 
@@ -196,13 +209,13 @@ namespace LinearAlgebra
      */
     const SmartPointer<const BlockType> block_10;
 
-    const SmartPointer<const InverseMatrixType> mass_w_inverse;
-    const SmartPointer<const InverseMatrixType> mass_u_inverse;
+    const SmartPointer<const InverseMatrixTypeW> mass_w_inverse;
+    const SmartPointer<const InverseMatrixTypeU> mass_u_inverse;
 
-    const ShiftedSchurComplement<BlockMatrixType, VectorType, InverseMatrixType>
+    const ShiftedSchurComplement<BlockMatrixType,
+                                 VectorType,
+                                 InverseMatrixTypeW>
       shifted_schur_complement;
-
-    const unsigned int n_neumann_terms;
 
     /*!
      * Current MPI communicator.
@@ -223,26 +236,26 @@ namespace LinearAlgebra
 
   template <typename BlockMatrixType,
             typename VectorType,
-            typename InverseMatrixType>
+            typename InverseMatrixTypeW,
+            typename InverseMatrixTypeU>
   ApproxShiftedSchurComplementInverse<BlockMatrixType,
                                       VectorType,
-                                      InverseMatrixType>::
+                                      InverseMatrixTypeW,
+                                      InverseMatrixTypeU>::
     ApproxShiftedSchurComplementInverse(
-      const BlockMatrixType &      system_matrix,
-      const InverseMatrixType &    mass_w_inverse,
-      const InverseMatrixType &    mass_u_inverse,
-      const unsigned int           n_neumann_terms,
+      const BlockMatrixType &      precon_matrix,
+      const InverseMatrixTypeW &   mass_w_inverse,
+      const InverseMatrixTypeU &   mass_u_inverse,
       const std::vector<IndexSet> &owned_partitioning,
       MPI_Comm                     mpi_communicator)
-    : block_01(&(system_matrix.block(0, 1)))
-    , block_10(&(system_matrix.block(1, 0)))
+    : block_01(&(precon_matrix.block(0, 1)))
+    , block_10(&(precon_matrix.block(1, 0)))
     , mass_w_inverse(&mass_w_inverse)
     , mass_u_inverse(&mass_u_inverse)
-    , shifted_schur_complement(system_matrix,
+    , shifted_schur_complement(precon_matrix,
                                mass_w_inverse,
                                owned_partitioning,
                                mpi_communicator)
-    , n_neumann_terms(n_neumann_terms)
     , mpi_communicator(mpi_communicator)
     , tmp1(owned_partitioning[1], mpi_communicator)
     , tmp2(owned_partitioning[0], mpi_communicator)
@@ -252,13 +265,14 @@ namespace LinearAlgebra
 
   template <typename BlockMatrixType,
             typename VectorType,
-            typename InverseMatrixType>
+            typename InverseMatrixTypeW,
+            typename InverseMatrixTypeU>
   void
-  ApproxShiftedSchurComplementInverse<BlockMatrixType,
-                                      VectorType,
-                                      InverseMatrixType>::vmult(VectorType &dst,
-                                                                const VectorType
-                                                                  &src) const
+  ApproxShiftedSchurComplementInverse<
+    BlockMatrixType,
+    VectorType,
+    InverseMatrixTypeW,
+    InverseMatrixTypeU>::vmult(VectorType &dst, const VectorType &src) const
   {
     try
       {
@@ -268,10 +282,12 @@ namespace LinearAlgebra
           /* log_history */ false,
           /* log_result */ false);
         SolverGMRES<VectorType> local_solver(solver_control);
-        local_solver.solve(shifted_schur_complement,
-                           dst,
-                           src,
-                           LA::PreconditionIdentity());
+        local_solver.solve(
+          shifted_schur_complement,
+          dst,
+          src,
+          //                           LA::PreconditionIdentity());
+          *mass_u_inverse);
       }
     catch (SolverControl::NoConvergence &)
       {
@@ -279,18 +295,6 @@ namespace LinearAlgebra
         //   << "Applied 15 shifted_schur_complement preconditioning iterations"
         //   << std::endl;
       }
-    // // zero order term
-    // tmp4 = src;
-
-    // for (unsigned int i = 0; i < n_neumann_terms - 1; ++i)
-    //   {
-    //     mass_u_inverse->vmult(tmp1, tmp4);
-    //     block_01->vmult(tmp2, tmp1);
-    //     mass_w_inverse->vmult(tmp3, tmp2);
-    //     block_10->vmult_add(tmp4, tmp3);
-    //   }
-
-    // mass_u_inverse->vmult(dst, tmp4);
   }
 } // end namespace LinearAlgebra
 
