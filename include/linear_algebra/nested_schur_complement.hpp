@@ -4,6 +4,9 @@
 #include <deal.II/base/quadrature_lib.h>
 #include <deal.II/base/subscriptor.h>
 
+#include <deal.II/lac/linear_operator.h>
+#include <deal.II/lac/packaged_operation.h>
+
 #include <deal.II/numerics/vector_tools.h>
 
 // STL
@@ -194,6 +197,7 @@ namespace LinearAlgebra
   {
   public:
     ApproxNestedSchurComplementInverse(
+      const LA::BlockSparseMatrix &precon_matrix,
       const SchurComplementType &  schur_complement_matrix,
       const std::vector<IndexSet> &owned_partitioning,
       DoFHandlerType &             dof_handler,
@@ -210,6 +214,8 @@ namespace LinearAlgebra
     vmult(VectorType &dst, const VectorType &src) const;
 
   private:
+    const SmartPointer<const LA::BlockSparseMatrix> precon_matrix;
+
     /*!
      * Smart pointer to system matrix block 00, pressure Laplace.
      */
@@ -231,6 +237,8 @@ namespace LinearAlgebra
     MPI_Comm mpi_communicator;
 
     const bool correct_to_zero_mean;
+
+    LA::PreconditionJacobi Mp_preconditioner;
   };
 
 
@@ -246,17 +254,21 @@ namespace LinearAlgebra
                                      VectorType,
                                      DoFHandlerType>::
     ApproxNestedSchurComplementInverse(
+      const LA::BlockSparseMatrix &_precon_matrix,
       const SchurComplementType &  approx_schur_complement_matrix,
       const std::vector<IndexSet> &owned_partitioning,
       DoFHandlerType &             _dof_handler,
       MPI_Comm                     mpi_communicator,
       const bool                   correct_to_zero_mean)
-    : approx_pressure_schur_compl(&approx_schur_complement_matrix)
+    : precon_matrix(&_precon_matrix)
+    , approx_pressure_schur_compl(&approx_schur_complement_matrix)
     , owned_partitioning(owned_partitioning)
     , dof_handler(_dof_handler.get_triangulation())
     , mpi_communicator(mpi_communicator)
     , correct_to_zero_mean(correct_to_zero_mean)
   {
+    Mp_preconditioner.initialize(precon_matrix->block(2, 2));
+
     if (correct_to_zero_mean)
       {
         FEValuesExtractors::Scalar pressure_components(2 * 3);
@@ -280,17 +292,19 @@ namespace LinearAlgebra
     try
       {
         SolverControl solver_control(
-          /* maxiter */ 12,
+          /* maxiter */ 100,
           // std::max(static_cast<std::size_t>(src.size()),
           //                                     static_cast<std::size_t>(1000)),
           1e-6 * src.l2_norm(),
           /* log_history */ false,
           /* log_result */ true);
         SolverGMRES<VectorType> local_solver(solver_control);
+
         local_solver.solve(*approx_pressure_schur_compl,
                            dst,
                            src,
                            LA::PreconditionIdentity());
+        //                  Mp_preconditioner);
       }
     catch (std::exception &exc)
       {
