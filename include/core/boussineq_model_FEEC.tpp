@@ -166,14 +166,27 @@ namespace ExteriorCalculus
               }
             else if ((c >= dim) && (c < 2 * dim))
               {
+<<<<<<< HEAD
                 coupling[c][d] = DoFTools::always;
+=======
+                if (d == 2 * dim)
+                  coupling[c][d] = DoFTools::none;
+                else
+                  coupling[c][d] = DoFTools::always;
+>>>>>>> 00430f00f73a5c6c4d7b6cb53f377627fb2df0de
               }
             else if (c == 2 * dim)
               {
                 if ((d >= dim) && (d < 2 * dim))
+<<<<<<< HEAD
                   coupling[c][d] = DoFTools::always;
                 else
                   coupling[c][d] = DoFTools::none;
+=======
+                  coupling[c][d] = DoFTools::none;
+                else
+                  coupling[c][d] = DoFTools::always;
+>>>>>>> 00430f00f73a5c6c4d7b6cb53f377627fb2df0de
               }
           }
       }
@@ -545,6 +558,7 @@ namespace ExteriorCalculus
 
         for (unsigned int i = 0; i < dofs_per_cell; ++i)
           for (unsigned int j = 0; j < dofs_per_cell; ++j)
+<<<<<<< HEAD
             data.local_matrix(i, j) +=
               scratch.phi_w[i] * scratch.phi_w[j] +
               parameters.time_step * one_over_reynolds_number *
@@ -557,6 +571,26 @@ namespace ExteriorCalculus
                  0.0) +
               scalar_product(scratch.phi_p[i], scratch.phi_p[j]) *
                 scratch.nse_fe_values.JxW(q);
+=======
+            {
+              const double phi_u_i_times_phi_w_j =
+                scratch.phi_u[i] * scratch.phi_w[j];
+              const double phi_w_i_times_phi_u_j =
+                scratch.phi_w[i] * scratch.phi_u[j];
+              data.local_matrix(i, j) +=
+                //              scratch.phi_w[i] * scratch.phi_w[j] +
+                parameters.time_step * one_over_reynolds_number *
+                  scratch.curl_phi_w[i] * scratch.curl_phi_w[j] +
+                +(std::fabs(phi_u_i_times_phi_w_j) > 1.0e-9 ?
+                    -2 * (std::signbit(phi_u_i_times_phi_w_j) - 0.5) :
+                    0.0) +
+                (std::fabs(phi_w_i_times_phi_u_j) > 1.0e-9 ?
+                   -2 * (std::signbit(phi_w_i_times_phi_u_j) - 0.5) :
+                   0.0) +
+                scratch.phi_p[i] * scratch.phi_p[j] *
+                  scratch.nse_fe_values.JxW(q);
+            }
+>>>>>>> 00430f00f73a5c6c4d7b6cb53f377627fb2df0de
       }
   }
 
@@ -643,6 +677,7 @@ namespace ExteriorCalculus
     vorticity_system_preconditioner_data.smoother_sweeps       = 1;
     vorticity_system_preconditioner_data.aggregation_threshold = 0.02;
 
+<<<<<<< HEAD
     vorticity_system_preconditioner =
       std::make_shared<VorticitySystemPreconType>();
     typename VorticitySystemPreconType::AdditionalData
@@ -650,6 +685,10 @@ namespace ExteriorCalculus
 
     vorticity_system_preconditioner->initialize(
       nse_preconditioner_matrix.block(2, 2),
+=======
+    vorticity_system_preconditioner->initialize(
+      nse_preconditioner_matrix.block(0, 0),
+>>>>>>> 00430f00f73a5c6c4d7b6cb53f377627fb2df0de
       vorticity_system_preconditioner_data);
 
     this->pcout << std::endl;
@@ -1304,11 +1343,12 @@ namespace ExteriorCalculus
              */
             approx_Mu_minus_Sw_inverse =
               std::make_shared<ApproxShiftedSchurComplementInverseType>(
+                //                nse_preconditioner_matrix,
+                //                *vorticity_system_preconditioner,
+                //                *Mu_inverse_preconditioner,
                 nse_matrix,
                 *Mw_inverse_preconditioner,
                 *Mu_inverse_preconditioner,
-                /* n_neumann_terms */ 1, // leave at 1, turned out not to be
-                                         // useful
                 nse_partitioning,
                 this->mpi_communicator);
 
@@ -1326,6 +1366,7 @@ namespace ExteriorCalculus
 
             approx_nested_schur_complement_inverse =
               std::make_shared<ApproxNesteSchurComplementInverseType>(
+                nse_preconditioner_matrix,
                 *pressure_system_approx_schur_compl_matrix,
                 nse_partitioning,
                 nse_dof_handler,
@@ -1363,7 +1404,7 @@ namespace ExteriorCalculus
         const double  solver_tolerance = 1e-8 * nse_rhs.l2_norm();
         SolverControl solver_control(
           /* n_max_iter */ (parameters.use_block_preconditioner_feec ? 500 :
-                                                                       1000),
+                                                                       15000),
           solver_tolerance,
           /* log_history */ true,
           /* log_result */ true);

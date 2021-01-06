@@ -55,6 +55,7 @@
 
 // STL
 #include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <iostream>
 #include <limits>
@@ -310,6 +311,8 @@ namespace ExteriorCalculus
       LinearAlgebra::ApproxShiftedSchurComplementInverse<
         LA::BlockSparseMatrix,
         LA::MPI::Vector,
+        //        VorticitySystemPreconType,
+        MassPerconditionerType,
         MassPerconditionerType>;
     std::shared_ptr<ApproxShiftedSchurComplementInverseType>
       approx_Mu_minus_Sw_inverse;
