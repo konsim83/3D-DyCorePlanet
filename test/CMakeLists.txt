@@ -25,6 +25,6 @@ set(TEST_TARGET test_dummy)
 #
 # Name all libraries to be tested (with different .cc files)
 #
-set(TEST_LIBRARIES AquaPlanet_LIBRARY)
+set(TEST_LIBRARIES AquaPlanet_Boussinesq_LIBRARY)
 
 DEAL_II_PICKUP_TESTS()
