@@ -11,10 +11,10 @@ subsection Boussinesq Model
 	
 	subsection Reference quantities
 		# Standard: 10 [m/s]
-		set velocity = 0.5
+		set velocity = 1.0
 		
 		# Standard: 1e+4 [m]
-		set length = 0.1
+		set length = 1.0
 		
 		# Standard: 273.15 [K]
 		set temperature = 2
@@ -37,7 +37,7 @@ subsection Boussinesq Model
 	# Replace standard H1-L2 elements with
 	# pairings and solvers appropriate 
 	# for H(curl)-H(div)-L2 elements
-	set use FEEC solver = false
+	set use FEEC solver = true
 	
 	set use block preconditioner feec = true
 	set correct pressure to zero mean = true
@@ -46,9 +46,9 @@ subsection Boussinesq Model
 	set use locally conservative discretization = false
 	
 	# This is only for debugging purposes
-	set solver diagnostics level = 1
+	set solver diagnostics level = 2
 	
-	set use schur complement solver = true
+	set use schur complement solver = false
 	set use direct solver = false
 	
 	# How many temperture steps should be done during one

@@ -243,9 +243,9 @@ namespace Standard
 
     unsigned int timestep_number;
 
-    using Block_00_PreconType = LA::PreconditionAMG;
+    using Block_00_PreconType = LA::PreconditionJacobi;
     using Block_11_PreconType = LA::PreconditionJacobi;
-    std::shared_ptr<Block_00_PreconType>    Amg_preconditioner;
+    std::shared_ptr<Block_00_PreconType>    Mu_plus_A_preconditioner;
     std::shared_ptr<Block_11_PreconType>    Mp_preconditioner;
     std::shared_ptr<LA::PreconditionJacobi> T_preconditioner;
 

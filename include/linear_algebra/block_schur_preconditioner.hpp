@@ -2,6 +2,7 @@
 
 // AquaPlanet
 #include <base/config.h>
+#include <linear_algebra/schur_complement.hpp>
 
 DYCOREPLANET_OPEN_NAMESPACE
 
@@ -21,12 +22,20 @@ namespace LinearAlgebra
                              const LA::BlockSparseMatrix &Spre,
                              const PreconditionerTypeMp & Mppreconditioner,
                              const PreconditionerTypeA &  Apreconditioner,
-                             const bool                   do_solve_A)
+                             const bool                   do_solve_A,
+                             const std::vector<IndexSet> &owned_partitioning,
+                             MPI_Comm                     mpi_communicator)
       : nse_matrix(&S)
       , nse_preconditioner_matrix(&Spre)
       , mp_preconditioner(Mppreconditioner)
       , a_preconditioner(Apreconditioner)
+      , schur_complement_Mp(S,
+                            Apreconditioner,
+                            owned_partitioning,
+                            mpi_communicator)
       , do_solve_A(do_solve_A)
+      , owned_partitioning(owned_partitioning)
+      , mpi_communicator(mpi_communicator)
     {}
 
     void
@@ -36,10 +45,10 @@ namespace LinearAlgebra
       {
         SolverControl solver_control(5000, 1e-6 * src.block(1).l2_norm());
         SolverGMRES<LA::MPI::Vector> solver(solver_control);
-        solver.solve(nse_preconditioner_matrix->block(1, 1),
+        solver.solve(schur_complement_Mp,
                      dst.block(1),
                      src.block(1),
-                     mp_preconditioner);
+                     LA::PreconditionIdentity());
         dst.block(1) *= -1.0;
       }
       {
@@ -65,7 +74,15 @@ namespace LinearAlgebra
     const SmartPointer<const LA::BlockSparseMatrix> nse_preconditioner_matrix;
     const PreconditionerTypeMp &                    mp_preconditioner;
     const PreconditionerTypeA &                     a_preconditioner;
-    const bool                                      do_solve_A;
+    SchurComplement<LA::BlockSparseMatrix,
+                    LA::MPI::Vector,
+                    PreconditionerTypeMp>
+      schur_complement_Mp;
+
+    const bool do_solve_A;
+
+    const std::vector<IndexSet> &owned_partitioning;
+    MPI_Comm                     mpi_communicator;
   };
 
 

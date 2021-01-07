@@ -1,7 +1,7 @@
 subsection Boussinesq Model
 
 	subsection Mesh parameters
-		set initial global refinement = 5
+		set initial global refinement = 2
 		
 		# Sets the domain geometry to cuboid. All directions are periodic apart from
 		# the z-direction. This is useful for debugging and later to restrict global
@@ -25,8 +25,8 @@ subsection Boussinesq Model
 
 	set space dimension = 3
 
-	set final time = 25.0
-	set time step = 0.01
+	set final time = 0.09
+	set time step = 0.1
 	
 	# Flag to adapt time step by recomputing the CFL number
 	set adapt time step = true
@@ -46,9 +46,9 @@ subsection Boussinesq Model
 	set use locally conservative discretization = false
 	
 	# This is only for debugging purposes
-	set solver diagnostics level = 1
+	set solver diagnostics level = 2
 	
-	set use schur complement solver = true
+	set use schur complement solver = false
 	set use direct solver = false
 	
 	# How many temperture steps should be done during one

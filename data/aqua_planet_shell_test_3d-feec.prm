@@ -1,7 +1,7 @@
 subsection Boussinesq Model
 
 	subsection Mesh parameters
-		set initial global refinement = 5
+		set initial global refinement = 3
 		
 		# Sets the domain geometry to cuboid. All directions are periodic apart from
 		# the z-direction. This is useful for debugging and later to restrict global
@@ -111,7 +111,7 @@ subsection Physical Constants
     # temperature.     
     #
     # Unit: [kg/(m*s)]
-    # Standard: 1.82e-5
+    # Standard: 1.82e-5 
     set dynamic viscosity = 1.0e-02
 
     # Specific heat capacity of air under constant pressure.
