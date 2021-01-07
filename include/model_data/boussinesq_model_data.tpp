@@ -1,3 +1,5 @@
+#pragma once
+
 #include <model_data/boussinesq_model_data.h>
 
 DYCOREPLANET_OPEN_NAMESPACE

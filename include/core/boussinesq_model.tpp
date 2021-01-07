@@ -1,3 +1,5 @@
+#pragma once
+
 #include <core/boussinesq_model.h>
 #include <core/planet_geometry.h>
 
@@ -117,7 +119,7 @@ namespace Standard
     const std::vector<IndexSet> &nse_partitioning,
     const std::vector<IndexSet> &nse_relevant_partitioning)
   {
-    Amg_preconditioner.reset();
+    Mu_plus_A_preconditioner.reset();
     Mp_preconditioner.reset();
 
     nse_preconditioner_matrix.clear();
@@ -526,29 +528,15 @@ namespace Standard
 
     assemble_nse_preconditioner(time_index);
 
+    Mu_plus_A_preconditioner = std::make_shared<Block_00_PreconType>();
+    typename Block_00_PreconType::AdditionalData Mu_plus_A_preconditioner_data;
+    Mu_plus_A_preconditioner->initialize(nse_preconditioner_matrix.block(0, 0),
+                                         Mu_plus_A_preconditioner_data);
+
     Mp_preconditioner = std::make_shared<Block_11_PreconType>();
     typename Block_11_PreconType::AdditionalData Mp_preconditioner_data;
     Mp_preconditioner->initialize(nse_preconditioner_matrix.block(1, 1),
                                   Mp_preconditioner_data);
-
-
-    std::vector<std::vector<bool>> constant_modes_velocity;
-    FEValuesExtractors::Vector     velocity_components(0);
-    DoFTools::extract_constant_modes(nse_dof_handler,
-                                     nse_fe.component_mask(velocity_components),
-                                     constant_modes_velocity);
-    Amg_preconditioner = std::make_shared<Block_00_PreconType>();
-    typename Block_00_PreconType::AdditionalData Amg_data;
-    /*
-     * This is relevant to AMG preconditioners
-     */
-    Amg_data.constant_modes        = constant_modes_velocity;
-    Amg_data.elliptic              = true;
-    Amg_data.higher_order_elements = true;
-    Amg_data.smoother_sweeps       = 1;
-    Amg_data.aggregation_threshold = 0.02;
-    Amg_preconditioner->initialize(nse_preconditioner_matrix.block(0, 0),
-                                   Amg_data);
 
     this->pcout << std::endl;
   }
@@ -1195,8 +1183,10 @@ namespace Standard
               preconditioner(nse_matrix,
                              nse_preconditioner_matrix,
                              *Mp_preconditioner,
-                             *Amg_preconditioner,
-                             false);
+                             *Mu_plus_A_preconditioner,
+                             /* do_full_solve */ false,
+                             nse_partitioning,
+                             this->mpi_communicator);
 
             SolverFGMRES<LA::MPI::BlockVector> solver(
               solver_control,
@@ -1217,8 +1207,10 @@ namespace Standard
               preconditioner(nse_matrix,
                              nse_preconditioner_matrix,
                              *Mp_preconditioner,
-                             *Amg_preconditioner,
-                             true);
+                             *Mu_plus_A_preconditioner,
+                             /* do_full_solve */ true,
+                             nse_partitioning,
+                             this->mpi_communicator);
 
             SolverControl solver_control_refined(nse_matrix.m(),
                                                  solver_tolerance,
@@ -1432,7 +1424,9 @@ namespace Standard
     this->pcout << "      Apply temperature solver..." << std::endl;
 
     SolverControl solver_control(temperature_matrix.m(),
-                                 1e-12 * temperature_rhs.l2_norm());
+                                 1e-12 * temperature_rhs.l2_norm(),
+                                 /* log_history */ false,
+                                 /* log_result */ false);
 
     SolverCG<LA::MPI::Vector> cg(solver_control);
 

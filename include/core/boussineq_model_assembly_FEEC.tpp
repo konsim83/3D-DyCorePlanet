@@ -1,3 +1,5 @@
+#pragma once
+
 #include <core/boussineq_model_assembly_FEEC.h>
 
 DYCOREPLANET_OPEN_NAMESPACE

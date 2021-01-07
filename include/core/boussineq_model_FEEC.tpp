@@ -1,3 +1,5 @@
+#pragma once
+
 #include <core/boussineq_model_FEEC.h>
 #include <core/planet_geometry.h>
 
@@ -633,28 +635,28 @@ namespace ExteriorCalculus
 
     assemble_nse_preconditioner(time_index);
 
-    std::vector<std::vector<bool>> constant_modes_vorticity;
-    FEValuesExtractors::Vector     vorticity_component(0);
-    DoFTools::extract_constant_modes(nse_dof_handler,
-                                     nse_fe.component_mask(vorticity_component),
-                                     constant_modes_vorticity);
-    vorticity_system_preconditioner =
-      std::make_shared<VorticitySystemPreconType>();
-    typename VorticitySystemPreconType::AdditionalData
-      vorticity_system_preconditioner_data;
-    /*
-     * This is relevant to AMG preconditioners
-     */
-    vorticity_system_preconditioner_data.constant_modes =
-      constant_modes_vorticity;
-    vorticity_system_preconditioner_data.elliptic              = true;
-    vorticity_system_preconditioner_data.higher_order_elements = false;
-    vorticity_system_preconditioner_data.smoother_sweeps       = 1;
-    vorticity_system_preconditioner_data.aggregation_threshold = 0.02;
+    // std::vector<std::vector<bool>> constant_modes_vorticity;
+    // FEValuesExtractors::Vector     vorticity_component(0);
+    // DoFTools::extract_constant_modes(nse_dof_handler,
+    //                                  nse_fe.component_mask(vorticity_component),
+    //                                  constant_modes_vorticity);
+    // vorticity_system_preconditioner =
+    //   std::make_shared<VorticitySystemPreconType>();
+    // typename VorticitySystemPreconType::AdditionalData
+    //   vorticity_system_preconditioner_data;
+    // /*
+    //  * This is relevant to AMG preconditioners
+    //  */
+    // vorticity_system_preconditioner_data.constant_modes =
+    //   constant_modes_vorticity;
+    // vorticity_system_preconditioner_data.elliptic              = true;
+    // vorticity_system_preconditioner_data.higher_order_elements = false;
+    // vorticity_system_preconditioner_data.smoother_sweeps       = 1;
+    // vorticity_system_preconditioner_data.aggregation_threshold = 0.02;
 
-    vorticity_system_preconditioner->initialize(
-      nse_preconditioner_matrix.block(0, 0),
-      vorticity_system_preconditioner_data);
+    // vorticity_system_preconditioner->initialize(
+    //   nse_preconditioner_matrix.block(0, 0),
+    //   vorticity_system_preconditioner_data);
 
     this->pcout << std::endl;
   }

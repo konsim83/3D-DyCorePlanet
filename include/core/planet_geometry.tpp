@@ -1,3 +1,5 @@
+#pragma once
+
 #include <core/planet_geometry.h>
 
 DYCOREPLANET_OPEN_NAMESPACE
