@@ -1115,7 +1115,7 @@ namespace Standard
                                       parameters.nse_velocity_degree) *
                              get_cfl_number()));
 
-    const double maximal_velocity = get_maximal_velocity();
+    get_maximal_velocity();
 
     this->pcout << "   New Time step (dimensionsless): " << parameters.time_step
                 << std::endl;

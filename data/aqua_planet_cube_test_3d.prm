@@ -1,7 +1,16 @@
 subsection Boussinesq Model
 
 	subsection Mesh parameters
-		set initial global refinement = 4
+		set initial global refinement = 3
+
+        # Adaptive refinements to be performed before first actual solve
+        set initial adaptive refinement = 2
+
+        # Whether adaptive refinement should be performed at all
+        set adaptive refinement = true
+
+        # Perform adaptive refinement every n-th time step
+        set adaptive refinement interval = 10
 		
 		# Sets the domain geometry to cuboid. All directions are periodic apart from
    		# the z-direction. This is useful for debugging and later to restrict global

@@ -38,6 +38,9 @@ namespace CoreModelData
     bool adapt_time_step;
 
     unsigned int initial_global_refinement;
+    unsigned int initial_adaptive_refinement;
+    bool         adaptive_refinement;
+    unsigned int adaptive_refinement_interval;
 
     bool cuboid_geometry;
 

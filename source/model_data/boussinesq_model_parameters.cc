@@ -11,6 +11,9 @@ CoreModelData::Parameters::Parameters(const std::string &parameter_filename)
   , time_step(0.1)
   , adapt_time_step(false)
   , initial_global_refinement(2)
+  , initial_adaptive_refinement(2)
+  , adaptive_refinement(false)
+  , adaptive_refinement_interval(10)
   , cuboid_geometry(false)
   , nse_theta(0.5)
   , nse_velocity_degree(2)
@@ -61,7 +64,27 @@ CoreModelData::Parameters::declare_parameters(ParameterHandler &prm)
                         Patterns::Integer(0),
                         "The number of global refinement steps performed on "
                         "the initial coarse mesh, before the problem is first "
-                        "solved there.");
+                        "solved.");
+
+      prm.declare_entry(
+        "initial adaptive refinement",
+        "2",
+        Patterns::Integer(0),
+        "The number of adaptive refinement steps performed on "
+        "the initially gloablly refined coarse mesh, before the problem is first "
+        "solved.");
+
+      prm.declare_entry(
+        "adaptive refinement",
+        "false",
+        Patterns::Bool(),
+        "Decide whether adaptive refinement will be performed.");
+
+      prm.declare_entry(
+        "adaptive refinement interval",
+        "10",
+        Patterns::Integer(0),
+        "Decide whether adaptive refinement will be performed.");
 
       prm.declare_entry(
         "cuboid geometry",
@@ -194,6 +217,14 @@ CoreModelData::Parameters::parse_parameters(ParameterHandler &prm)
     prm.enter_subsection("Mesh parameters");
     {
       initial_global_refinement = prm.get_integer("initial global refinement");
+
+      initial_adaptive_refinement =
+        prm.get_integer("initial adaptive refinement");
+
+      adaptive_refinement = prm.get_bool("adaptive refinement");
+
+      adaptive_refinement_interval =
+        prm.get_integer("adaptive refinement interval");
 
       cuboid_geometry = prm.get_bool("cuboid geometry");
     }

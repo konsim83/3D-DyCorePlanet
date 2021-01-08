@@ -25,15 +25,6 @@
 #include <deal.II/fe/fe_values.h>
 #include <deal.II/fe/mapping_q.h>
 
-#include <deal.II/grid/filtered_iterator.h>
-#include <deal.II/grid/grid_generator.h>
-#include <deal.II/grid/grid_refinement.h>
-#include <deal.II/grid/grid_tools.h>
-#include <deal.II/grid/manifold_lib.h>
-#include <deal.II/grid/tria.h>
-#include <deal.II/grid/tria_accessor.h>
-#include <deal.II/grid/tria_iterator.h>
-
 #include <deal.II/lac/affine_constraints.h>
 #include <deal.II/lac/block_sparsity_pattern.h>
 #include <deal.II/lac/full_matrix.h>
@@ -51,7 +42,6 @@
 #include <deal.II/numerics/matrix_tools.h>
 #include <deal.II/numerics/solution_transfer.h>
 #include <deal.II/numerics/vector_tools.h>
-
 
 // STL
 #include <algorithm>
@@ -205,6 +195,9 @@ namespace ExteriorCalculus
     solve_temperature();
 
     void
+    refine_and_coarsen(const unsigned int max_level);
+
+    void
     output_results();
 
     void
@@ -226,10 +219,6 @@ namespace ExteriorCalculus
 
     LA::BlockSparseMatrix nse_matrix;
     LA::BlockSparseMatrix nse_preconditioner_matrix;
-    LA::BlockSparseMatrix nse_mass_matrix;
-    LA::BlockSparseMatrix nse_advection_matrix;
-    LA::BlockSparseMatrix nse_diffusion_matrix;
-    LA::BlockSparseMatrix nse_coriolis_matrix;
     LA::MPI::BlockVector  nse_rhs;
 
     LA::MPI::BlockVector nse_solution;
@@ -252,7 +241,10 @@ namespace ExteriorCalculus
 
     std::shared_ptr<LA::PreconditionJacobi> T_preconditioner;
 
-    const bool rebuild_temperature_preconditioner = true;
+    bool rebuild_nse_matrix;
+    bool rebuild_nse_preconditioner;
+    bool rebuild_temperature_matrices;
+    bool rebuild_temperature_preconditioner;
 
     void
     local_assemble_nse_preconditioner(
