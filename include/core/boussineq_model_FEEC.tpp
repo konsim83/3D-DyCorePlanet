@@ -1381,11 +1381,7 @@ namespace ExteriorCalculus
             approx_nested_schur_complement_inverse =
               std::make_shared<ApproxNesteSchurComplementInverseType>(
                 nse_preconditioner_matrix,
-                *pressure_system_approx_schur_compl_matrix,
-                nse_partitioning,
-                nse_dof_handler,
-                this->mpi_communicator,
-                parameters.correct_pressure_to_zero_mean);
+                *pressure_system_approx_schur_compl_matrix);
           }
 
 
@@ -1425,9 +1421,12 @@ namespace ExteriorCalculus
 
         if (parameters.correct_pressure_to_zero_mean)
           {
-            const double mean_pressure = VectorTools::compute_mean_value(
-              nse_dof_handler, QGauss<dim>(2), nse_solution, 2 * dim);
-            nse_solution.block(2).add(-mean_pressure);
+            const double mean_pressure =
+              VectorTools::compute_mean_value(nse_dof_handler,
+                                              QGauss<dim>(2),
+                                              distributed_nse_solution,
+                                              2 * dim);
+            distributed_nse_solution.block(2).add(-mean_pressure);
 
             this->pcout
               << "      Blocksolver RHS pre-correction: The mean value "
@@ -1435,12 +1434,11 @@ namespace ExteriorCalculus
               << -mean_pressure << "    -> new mean:   "
               << VectorTools::compute_mean_value(nse_dof_handler,
                                                  QGauss<dim>(2),
-                                                 nse_solution,
+                                                 distributed_nse_solution,
                                                  2 * dim)
               << std::endl;
           }
 
-        //          try
         {
           SolverGMRES<LA::MPI::BlockVector> solver(
             solver_control,
@@ -1457,7 +1455,9 @@ namespace ExteriorCalculus
                   nse_matrix,
                   *Mw_inverse_preconditioner,
                   *approx_Mu_minus_Sw_inverse,
-                  *approx_nested_schur_complement_inverse);
+                  *approx_nested_schur_complement_inverse,
+                  nse_dof_handler,
+                  parameters.correct_pressure_to_zero_mean);
 
               solver.solve(nse_matrix,
                            distributed_nse_solution,
@@ -1479,35 +1479,7 @@ namespace ExteriorCalculus
 
           n_iterations = solver_control.last_step();
         }
-        //          catch (SolverControl::NoConvergence &)
-        //            {
-        //              const
-        //              LinearAlgebra::BlockSchurPreconditioner<Block_00_PreconType,
-        //                                                            Block_11_PreconType>
-        //                preconditioner(nse_matrix,
-        //                               nse_preconditioner_matrix,
-        //                               *Mp_preconditioner,
-        //                               *Amg_preconditioner,
-        //                               true);
-        //
-        //              SolverControl solver_control_refined(nse_matrix.m(),
-        //                                                   solver_tolerance);
-        //
-        //              SolverGMRES<LA::MPI::BlockVector> solver(
-        //                solver_control_refined,
-        //                mem,
-        //                SolverGMRES<LA::MPI::BlockVector>::AdditionalData(
-        //                  50));
-        //
-        //              solver.solve(nse_matrix,
-        //                           distributed_nse_solution,
-        //                           nse_rhs,
-        //                           preconditioner);
-        //
-        //              n_iterations =
-        //                (solver_control.last_step() +
-        //                solver_control_refined.last_step());
-        //            }
+
         nse_constraints.distribute(distributed_nse_solution);
 
         /*
@@ -1521,276 +1493,6 @@ namespace ExteriorCalculus
         this->pcout << "      " << n_iterations
                     << "   GMRES iterations for NSE system." << std::endl;
       } // solver time intervall constraint
-  }
-
-
-  template <int dim>
-  void
-  BoussinesqModel<dim>::solve_NSE_Schur_complement()
-  {
-    //    if ((timestep_number == 0) ||
-    //        ((timestep_number > 0) &&
-    //         (timestep_number % parameters.NSE_solver_interval == 0)))
-    //      {
-    //        TimerOutput::Scope timer_section(this->computing_timer,
-    //                                         "   Solve NSE system");
-    //        this->pcout
-    //          << "   Solving Navier-Stokes system for one time step with
-    //          (preconditioned Schur complement solver)... "
-    //          << std::endl;
-    //
-    //        /*
-    //         * Prepare vectors
-    //         */
-    //        LA::MPI::BlockVector distributed_nse_solution(nse_rhs);
-    //        distributed_nse_solution = nse_solution;
-    //        /*
-    //         * We solved only for a scaled pressure to
-    //         * keep the system symmetric. So transform now and rescale
-    //         later.
-    //         */
-    //        distributed_nse_solution.block(2) *= parameters.time_step;
-    //
-    //        /*
-    //         * Set values at constrained local pressure dofs to zero in
-    //         order not
-    //         * to bother the Schur complement solver with irrelevant values.
-    //         */
-    //        const unsigned int
-    //          start = (distributed_nse_solution.block(0).size() +
-    //                   distributed_nse_solution.block(1).size() +
-    //                   distributed_nse_solution.block(2).local_range().first),
-    //          end   = (distributed_nse_solution.block(0).size() +
-    //                 distributed_nse_solution.block(1).size() +
-    //                 distributed_nse_solution.block(2).local_range().second);
-    //
-    //        for (unsigned int i = start; i < end; ++i)
-    //          if (nse_constraints.is_constrained(i))
-    //            distributed_nse_solution(i) = 0;
-    //
-    //        /*
-    //         * Initialize the preconditioner of the mass matrix in H(curl).
-    //         */
-    //        Mw_schur_preconditioner =
-    //          std::make_shared<Mw_InnerPerconditionerType>();
-    //        typename Mw_InnerPerconditionerType::AdditionalData
-    //          Mw_schur_preconditioner_data;
-    //        //        std::vector<std::vector<bool>>
-    //        constant_modes_velocity;
-    //        //        FEValuesExtractors::Vector velocity_components(dim);
-    //        //        DoFTools::extract_constant_modes(nse_dof_handler,
-    //        // nse_fe.component_mask(
-    //        // velocity_components),
-    //        // constant_modes_velocity);
-    //        //
-    //        //        Mw_schur_preconditioner_data.constant_modes =
-    //        //        constant_modes_velocity;
-    //        //        Mw_schur_preconditioner_data.elliptic = false;
-    //        //        Mw_schur_preconditioner_data.higher_order_elements =
-    //        false;
-    //        //        Mw_schur_preconditioner_data.smoother_sweeps       =
-    //        1;
-    //        //        Mw_schur_preconditioner_data.aggregation_threshold =
-    //        0.02;
-    //        // Fill preconditioner with life
-    //        Mw_schur_preconditioner->initialize(nse_matrix.block(0, 0),
-    //                                            Mw_schur_preconditioner_data);
-    //
-    //        using Mw_InverseType =
-    //          LinearAlgebra::InverseMatrix<LA::SparseMatrix,
-    //                                       Mw_InnerPerconditionerType>;
-    //        const Mw_InverseType Mw_inverse(nse_matrix.block(0, 0),
-    //                                        *Mw_schur_preconditioner,
-    //                                        /* use_simple_cg */ true);
-    //
-    //        /*
-    //         * Set up shifted Schur complement w.r.t. Mw, i.e.,
-    //         * Sw = Mu - Ru*Mw_inverse*Rw
-    //         */
-    //        LinearAlgebra::ShiftedSchurComplement<LA::BlockSparseMatrix,
-    //                                              LA::MPI::Vector,
-    //                                              Mw_InverseType>
-    //          Mu_minus_Sw(nse_matrix,
-    //                      Mw_inverse,
-    //                      nse_partitioning,
-    //                      this->mpi_communicator);
-    //
-    //        using Mu_minus_Sw_PreconditionerType =
-    //          LA::PreconditionIdentity;
-    //        Mu_minus_Sw_PreconditionerType Mu_minus_Sw_preconditioner;
-    //        //        using Mu_minus_Sw_PreconditionerType =
-    //        //        LA::PreconditionJacobi; Mu_minus_Sw_PreconditionerType
-    //        //        Mu_minus_Sw_preconditioner;
-    //        Mu_minus_Sw_preconditioner.initialize(nse_matrix.block(1, 1));
-    //
-    //        using Mu_minus_Sw_InverseType = LinearAlgebra::InverseMatrix<
-    //          LinearAlgebra::ShiftedSchurComplement<LA::BlockSparseMatrix,
-    //                                                LA::MPI::Vector,
-    //                                                Mw_InverseType>,
-    //          Mu_minus_Sw_PreconditionerType>;
-    //        Mu_minus_Sw_InverseType Mu_minus_Sw_inverse(Mu_minus_Sw,
-    //                                                    Mu_minus_Sw_preconditioner,
-    //                                                    /* use_simple_cg */
-    //                                                    false);
-    //
-    //        {
-    //          TimerOutput::Scope t(
-    //            this->computing_timer,
-    //            "      Solve NSE system - Schur complement solver (for
-    //            pressure)");
-    //
-    //          // tmp of size block(1)
-    //          LA::MPI::Vector tmp_1(nse_partitioning[1],
-    //          this->mpi_communicator);
-    //
-    //          // Compute schur_rhs = B*Mu_minus_Sw_inverse*f
-    //          LA::MPI::Vector schur_rhs(nse_partitioning[2],
-    //                                    this->mpi_communicator);
-    //
-    //          this->pcout
-    //            << std::endl
-    //            << "      Prepare RHS for nested inverse Schur complement
-    //            solver (for p)..."
-    //            << std::endl;
-    //
-    //          Mu_minus_Sw_inverse.vmult(tmp_1, nse_rhs.block(1));
-    //          nse_matrix.block(2, 1).vmult(schur_rhs, tmp_1);
-    //
-    //          if (/* correct_pressure_mean_value */ true)
-    //            {
-    //              DoFHandler<dim> fake_dof_pressure(this->triangulation);
-    //              FEValuesExtractors::Scalar pressure_components(2 * dim);
-    //              ComponentMask              pressure_mask(
-    //                nse_fe.component_mask(pressure_components));
-    //              const auto &pressure_fe(
-    //                nse_dof_handler.get_fe().get_sub_fe(pressure_mask));
-    //              fake_dof_pressure.distribute_dofs(pressure_fe);
-    //              const double mean_value = VectorTools::compute_mean_value(
-    //                fake_dof_pressure,
-    //                QGauss<3>(parameters.nse_velocity_degree),
-    //                schur_rhs,
-    //                0);
-    //              schur_rhs.add(-mean_value);
-    //
-    //              std::cout << "      Schur RHS pre-correction: The mean
-    //              value"
-    //                           "was adjusted by "
-    //                        << -mean_value << "    -> new mean:   "
-    //                        << VectorTools::compute_mean_value(
-    //                             fake_dof_pressure,
-    //                             QGauss<3>(parameters.nse_velocity_degree),
-    //                             schur_rhs,
-    //                             0)
-    //                        << std::endl;
-    //            }
-    //
-    //          this->pcout
-    //            << "      RHS computation for nested Schur complement solver
-    //            (for p) done..."
-    //            << std::endl
-    //            << std::endl;
-    //
-    //          this->pcout << "      Apply Schur complement solver (for
-    //          p)..."
-    //                      << std::endl;
-    //
-    //          /*
-    //           * Build nested Schur complement
-    //           */
-    //          using NestedSchur_PreconditionerType =
-    //          LA::PreconditionIdentity; NestedSchur_PreconditionerType
-    //            nested_schur_Mu_minus_Sw_preconditioner;
-    //          LinearAlgebra::NestedSchurComplement<LA::BlockSparseMatrix,
-    //                                               LA::MPI::Vector,
-    //                                               Mu_minus_Sw_InverseType,
-    //                                               DoFHandler<dim>>
-    //            nested_schur_Mu_minus_Sw(nse_matrix,
-    //                                     Mu_minus_Sw_inverse,
-    //                                     nse_partitioning,
-    //                                     nse_dof_handler,
-    //                                     this->mpi_communicator);
-    //
-    //          // Set Solver parameters for solving for p
-    //          SolverControl                solver_control(nse_matrix.m(),
-    //                                       1e-6 * schur_rhs.l2_norm());
-    //          SolverGMRES<LA::MPI::Vector> schur_solver(solver_control);
-    //
-    //          schur_solver.solve(nested_schur_Mu_minus_Sw,
-    //                             distributed_nse_solution.block(2),
-    //                             schur_rhs,
-    //                             nested_schur_Mu_minus_Sw_preconditioner);
-    //
-    //          this->pcout
-    //            << "      Iterative nested Schur complement solver (for p)
-    //            converged in "
-    //            << solver_control.last_step() << " iterations." << std::endl
-    //            << std::endl;
-    //
-    //          nse_constraints.distribute(distributed_nse_solution);
-    //        } // solve for pressure
-    //
-    //        {
-    //          TimerOutput::Scope t(
-    //            this->computing_timer,
-    //            "      Solve NSE system - outer Schur complement solver (for
-    //            u)");
-    //
-    //          this->pcout << "      Apply outer solver..." << std::endl;
-    //
-    //          // tmp of size block(1)
-    //          LA::MPI::Vector tmp_1(nse_partitioning[1],
-    //          this->mpi_communicator);
-    //
-    //          nse_matrix.block(1, 2).vmult(tmp_1,
-    //                                       distributed_nse_solution.block(2));
-    //          tmp_1 *= -1;
-    //          tmp_1 += nse_rhs.block(1);
-    //
-    //          // Solve for u
-    //          Mu_minus_Sw_inverse.vmult(distributed_nse_solution.block(1),
-    //          tmp_1);
-    //
-    //          this->pcout << "      Schur complement solver (for u)
-    //          completed."
-    //                      << std::endl
-    //                      << std::endl;
-    //
-    //          nse_constraints.distribute(distributed_nse_solution);
-    //        } // solve for u
-    //
-    //        {
-    //          TimerOutput::Scope t(
-    //            this->computing_timer,
-    //            "      Solve NSE system - inner CG solver (for w)");
-    //
-    //          this->pcout << "      Apply inner CG solver (for w)..." <<
-    //          std::endl;
-    //
-    //          // tmp of size block(0)
-    //          LA::MPI::Vector tmp_0(nse_partitioning[0],
-    //          this->mpi_communicator);
-    //
-    //          nse_matrix.block(0, 1).vmult(tmp_0,
-    //                                       distributed_nse_solution.block(1));
-    //          Mw_inverse.vmult(distributed_nse_solution.block(0), tmp_0);
-    //
-    //          distributed_nse_solution.block(0) *= -1;
-    //
-    //          this->pcout << "      Inner CG solver (for w) completed." <<
-    //          std::endl
-    //                      << std::endl;
-    //
-    //          nse_constraints.distribute(distributed_nse_solution);
-    //        } // solve for w
-    //
-    //        /*
-    //         * We solved only for a scaled pressure to
-    //         * keep the system symmetric. So retransform.
-    //         */
-    //        distributed_nse_solution.block(2) /= parameters.time_step;
-    //
-    //        nse_solution = distributed_nse_solution;
-    //      } // solver time intervall constraint
   }
 
 
@@ -2443,7 +2145,8 @@ namespace ExteriorCalculus
 
         if (parameters.use_schur_complement_solver)
           {
-            solve_NSE_Schur_complement();
+            throw std::runtime_error(
+              "Schur complement solver not implemented for FEEC method.");
           }
         else
           {

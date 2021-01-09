@@ -62,7 +62,7 @@
 #include <core/planet_geometry.h>
 #include <linear_algebra/approximate_inverse.hpp>
 #include <linear_algebra/approximate_schur_complement.hpp>
-#include <linear_algebra/block_schur_preconditioner.hpp>
+#include <linear_algebra/block_schur_preconditioner_FEEC.hpp>
 #include <linear_algebra/inverse_matrix.hpp>
 #include <linear_algebra/nested_schur_complement.hpp>
 #include <linear_algebra/preconditioner.h>
@@ -323,8 +323,7 @@ namespace ExteriorCalculus
     using ApproxNesteSchurComplementInverseType =
       LinearAlgebra::ApproxNestedSchurComplementInverse<
         SchurComplementLowerBlockType,
-        LA::MPI::Vector,
-        DoFHandler<dim>>;
+        LA::MPI::Vector>;
     std::shared_ptr<ApproxNesteSchurComplementInverseType>
       approx_nested_schur_complement_inverse;
 
