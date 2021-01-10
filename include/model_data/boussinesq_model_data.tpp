@@ -218,7 +218,8 @@ namespace CoreModelData
 
     template <int dim>
     double
-    TemperatureRHS<dim>::value(const Point<dim> &p, const unsigned int) const
+    TemperatureRHS<dim>::value(const Point<dim> & /*p*/,
+                               const unsigned int) const
     {
       return 0;
     }

@@ -8,6 +8,7 @@
 
 // AquaPlanet
 #include <base/config.h>
+#include <base/utilities.h>
 
 DYCOREPLANET_OPEN_NAMESPACE
 
@@ -35,8 +36,8 @@ namespace LinearAlgebra
 
       if (correct_pressure_mean_value)
         {
-          const double mean_pressure = VectorTools::compute_mean_value(
-            *dof_handler, QGauss<3>(2), dst, /* 2*dim */ 6);
+          const double mean_pressure =
+            Tools::compute_pressure_mean_value(*dof_handler, QGauss<3>(1), dst);
           dst.block(2).add(-mean_pressure);
         }
     }

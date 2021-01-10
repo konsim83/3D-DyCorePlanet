@@ -1,5 +1,7 @@
 #include <base/utilities.h>
 
+#include <base/utilities.tpp>
+
 DYCOREPLANET_OPEN_NAMESPACE
 
 namespace Tools
@@ -44,6 +46,21 @@ namespace Tools
           }
       } // ++face_index
   }
+
+  /*
+   * Template instantiations
+   */
+  template double
+  compute_pressure_mean_value<2>(
+    const DoFHandler<2> &       dof,
+    const Quadrature<2> &       quadrature,
+    const LA::MPI::BlockVector &distributed_pressure_vector);
+
+  template double
+  compute_pressure_mean_value<3>(
+    const DoFHandler<3> &       dof,
+    const Quadrature<3> &       quadrature,
+    const LA::MPI::BlockVector &distributed_pressure_vector);
 
 } // namespace Tools
 

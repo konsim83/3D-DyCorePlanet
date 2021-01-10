@@ -1422,20 +1422,18 @@ namespace ExteriorCalculus
         if (parameters.correct_pressure_to_zero_mean)
           {
             const double mean_pressure =
-              VectorTools::compute_mean_value(nse_dof_handler,
-                                              QGauss<dim>(2),
-                                              distributed_nse_solution,
-                                              2 * dim);
+              Tools::compute_pressure_mean_value(nse_dof_handler,
+                                                 QGauss<dim>(2),
+                                                 distributed_nse_solution);
             distributed_nse_solution.block(2).add(-mean_pressure);
 
             this->pcout
               << "      Blocksolver RHS pre-correction: The mean value "
                  "was adjusted by "
               << -mean_pressure << "    -> new mean:   "
-              << VectorTools::compute_mean_value(nse_dof_handler,
-                                                 QGauss<dim>(2),
-                                                 distributed_nse_solution,
-                                                 2 * dim)
+              << Tools::compute_pressure_mean_value(nse_dof_handler,
+                                                    QGauss<dim>(2),
+                                                    distributed_nse_solution)
               << std::endl;
           }
 
