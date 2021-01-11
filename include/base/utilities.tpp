@@ -23,16 +23,21 @@ Tools::compute_pressure_mean_value(
   double              mean = 0.;
   double              area = 0.;
 
+  const unsigned int                   dofs_per_cell = fe_system.dofs_per_cell;
+  std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
+
   // Compute mean value
   for (const auto &cell : dof.active_cell_iterators())
     if (cell->is_locally_owned())
       {
         fe_values.reinit(cell);
-        fe_values[pressure].get_function_values(distributed_pressure_vector,
-                                                values);
+        cell->get_dof_indices(local_dof_indices);
+        // fe_values[pressure].get_function_values(distributed_pressure_vector,
+        //                                         values);
         for (unsigned int k = 0; k < quadrature.size(); ++k)
           {
-            mean += fe_values.JxW(k) * values[k];
+            mean += fe_values.JxW(k) * distributed_pressure_vector(
+                                         local_dof_indices[18]); // values[k];
             area += fe_values.JxW(k);
           }
       }

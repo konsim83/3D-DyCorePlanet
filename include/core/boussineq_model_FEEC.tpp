@@ -314,6 +314,7 @@ namespace ExteriorCalculus
     {
       nse_constraints.clear();
       nse_constraints.reinit(nse_relevant_set);
+
       DoFTools::make_hanging_node_constraints(nse_dof_handler, nse_constraints);
 
       if (parameters.cuboid_geometry)
@@ -1669,6 +1670,9 @@ namespace ExteriorCalculus
   void
   BoussinesqModel<dim>::refine_and_coarsen(const unsigned int max_level)
   {
+    AssertThrow(Utilities::MPI::n_mpi_processes(MPI_COMM_WORLD) == 1,
+                ExcMessage("Refinement only works on 1 MPI process."));
+
     parallel::distributed::SolutionTransfer<dim, LA::MPI::Vector>
       temperature_transfer(temperature_dof_handler);
     parallel::distributed::SolutionTransfer<dim, LA::MPI::BlockVector>
@@ -1755,6 +1759,8 @@ namespace ExteriorCalculus
         old_nse_solution = old_distributed_stokes;
       }
     }
+
+    // GridTools::remove_hanging_nodes(this->triangulation);
   }
 
 
