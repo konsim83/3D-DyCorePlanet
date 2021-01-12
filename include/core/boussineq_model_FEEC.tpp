@@ -19,7 +19,7 @@ namespace ExteriorCalculus
     , parameters(parameters_)
     , temperature_mapping(1)
     , nse_fe(
-        static_cast<const FiniteElement<dim> &>(FE_Nedelec<dim>(
+        static_cast<const FiniteElement<dim> &>(FE_NedelecSZ<dim>(
           std::max(static_cast<int>(parameters.nse_velocity_degree) - 1, 0))),
         1,
         static_cast<const FiniteElement<dim> &>(FE_RaviartThomas<dim>(
@@ -1423,9 +1423,13 @@ namespace ExteriorCalculus
         if (parameters.correct_pressure_to_zero_mean)
           {
             const double mean_pressure =
-              Tools::compute_pressure_mean_value(nse_dof_handler,
-                                                 QGauss<dim>(2),
-                                                 distributed_nse_solution);
+              // Tools::compute_pressure_mean_value(nse_dof_handler,
+              //                                    QGauss<dim>(2),
+              //                                    distributed_nse_solution);
+              VectorTools::compute_mean_value(nse_dof_handler,
+                                              QGauss<dim>(2),
+                                              nse_solution,
+                                              2 * dim);
             distributed_nse_solution.block(2).add(-mean_pressure);
 
             this->pcout
